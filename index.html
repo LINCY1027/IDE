@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTIDE - Professional Workspace</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/monokai.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-body: #F5F5F7; --bg-header: rgba(255, 255, 255, 0.9); --bg-card: #FFFFFF;
+            --text-main: #1D1D1F; --text-muted: #86868B; --border-color: #E5E5EA;
+            --btn-bg: #E5E5EA; --btn-active: #FFFFFF; --cm-bg: #FAFAFA; --cm-gutter: #F5F5F7;
+            --console-bg: #2C2C2E; --console-text: #34C759; --modal-overlay: rgba(0, 0, 0, 0.4);
+            --ai-accent: #A020F0; --sidebar-bg: #F0F0F3; --sidebar-hover: #E5E5EA;
+            --sidebar-active: #007AFF; --sidebar-active-text: #FFFFFF;
+        }
+        body.dark-mode {
+            --bg-body: #000000; --bg-header: rgba(28, 28, 30, 0.9); --bg-card: #1C1C1E;
+            --text-main: #F5F5F7; --text-muted: #86868B; --border-color: #38383A;
+            --btn-bg: #2C2C2E; --btn-active: #636366; --cm-bg: #272822; --cm-gutter: #1C1C1E;
+            --console-bg: #111111; --modal-overlay: rgba(0, 0, 0, 0.7);
+            --ai-accent: #BF5AF2; --sidebar-bg: #111111; --sidebar-hover: #2C2C2E;
+            --sidebar-active: #0A84FF; --sidebar-active-text: #FFFFFF;
+        }
+        body {
+            margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-body); color: var(--text-main);
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden; transition: background-color 0.3s;
+        }
+        
+        header {
+            background-color: var(--bg-header); backdrop-filter: blur(10px); padding: 12px 24px;
+            display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); z-index: 10;
+        }
+        .header-title { font-weight: 800; font-size: 18px; letter-spacing: 0.5px; background: linear-gradient(45deg, #007AFF, #A020F0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header-actions button {
+            background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color);
+            padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: 0.2s;
+        }
+        .header-actions button:hover { background-color: var(--border-color); }
+
+        .main-workspace { display: flex; flex: 1; overflow: hidden; padding: 12px; gap: 4px; }
+        .panel {
+            background-color: var(--bg-card); border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+            display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color);
+        }
+        
+        /* Sidebar Styles */
+        .sidebar { width: 200px; background-color: var(--sidebar-bg); flex-shrink: 0; }
+        .sidebar-header { padding: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
+        .sidebar-actions i { cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; }
+        .sidebar-actions i:hover { background-color: var(--sidebar-hover); color: var(--text-main); }
+        .file-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+        .file-item { padding: 6px 16px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 8px; color: var(--text-main); transition: 0.2s; }
+        .file-item:hover { background-color: var(--sidebar-hover); }
+        .file-item.active { background-color: var(--sidebar-active); color: var(--sidebar-active-text); }
+        .file-item.active i { color: var(--sidebar-active-text) !important; }
+        
+        .editor-side { flex: 1; min-width: 0; }
+        .preview-side { flex: 1; min-width: 0; position: relative; }
+        
+        .resizer { width: 12px; cursor: col-resize; display: flex; justify-content: center; align-items: center; transition: background-color 0.2s; border-radius: 6px; z-index: 20; flex-shrink: 0; }
+        .resizer:hover, .resizer.active { background-color: var(--border-color); }
+        .resizer::after { content: ''; width: 2px; height: 24px; background-color: var(--text-muted); border-radius: 1px; opacity: 0.5; }
+
+        .h-resizer { height: 12px; cursor: row-resize; display: flex; justify-content: center; align-items: center; transition: background-color 0.2s; background-color: var(--bg-body); z-index: 20; }
+        .h-resizer:hover, .h-resizer.active { background-color: var(--border-color); }
+        .h-resizer::after { content: ''; height: 2px; width: 24px; background-color: var(--text-muted); border-radius: 1px; opacity: 0.5; }
+
+        .toolbar { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border-color); background-color: var(--bg-card); overflow-x: auto; }
+        .tabs { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; cursor: pointer; font-weight: 500; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .tab-btn.active { background-color: var(--btn-bg); color: var(--text-main); }
+        
+        .editor-tools { display: flex; gap: 6px; flex-shrink: 0; margin-left: 12px; }
+        .icon-btn { background: transparent; border: 1px solid transparent; color: var(--text-muted); padding: 4px 8px; cursor: pointer; border-radius: 4px; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 4px; }
+        .icon-btn:hover { background-color: var(--btn-bg); color: var(--text-main); border-color: var(--border-color); }
+        .ai-btn { color: var(--ai-accent); border: 1px solid rgba(160, 32, 240, 0.3); }
+        .ai-btn:hover { background-color: rgba(160, 32, 240, 0.1); color: var(--ai-accent); border-color: var(--ai-accent); }
+        .paste-btn:hover { background-color: rgba(0, 122, 255, 0.1); color: #007AFF; border-color: #007AFF; }
+        .clear-btn:hover { background-color: rgba(255, 59, 48, 0.1); color: #FF3B30; border-color: #FF3B30; }
+
+        .device-buttons { background-color: var(--btn-bg); border-radius: 6px; padding: 2px; display: inline-flex; }
+        .device-buttons button { background-color: transparent; color: var(--text-main); border: none; padding: 4px 10px; cursor: pointer; border-radius: 4px; font-size: 12px; }
+        .device-buttons button.active { background-color: var(--btn-active); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        
+        .zoom-controls { display: flex; align-items: center; gap: 8px; margin-left: 16px; border-left: 1px solid var(--border-color); padding-left: 16px; }
+        .zoom-slider { width: 80px; accent-color: var(--text-muted); cursor: pointer; }
+        .zoom-label { font-size: 12px; color: var(--text-muted); width: 36px; font-family: monospace; text-align: right;}
+
+        .text-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 4px;}
+        .text-btn:hover { color: var(--text-main); }
+
+        .CodeMirror { flex: 1; font-family: 'SF Mono', Consolas, monospace; font-size: 14px; background-color: var(--cm-bg); color: var(--text-main); }
+        .CodeMirror-gutters { background-color: var(--cm-gutter); border-right: 1px solid var(--border-color); }
+        
+        .iframe-wrapper { flex: 1; position: relative; background-color: var(--bg-body); overflow: hidden; }
+        .pan-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform-origin: center; overflow: visible; }
+        .device-frame { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(1);
+            background-color: white; border: 1px solid var(--border-color); 
+            border-radius: 6px; overflow: hidden; transition: border-radius 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05); transform-origin: center center;
+        }
+        #preview-output { width: 100%; height: 100%; border: none; display: block; }
+        
+        .console-panel { height: 120px; min-height: 40px; background-color: var(--console-bg); display: flex; flex-direction: column; color: var(--console-text); font-family: 'SF Mono', Consolas, monospace; font-size: 12px; z-index: 10; }
+        .console-header { padding: 6px 12px; background-color: rgba(0,0,0,0.2); color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .console-logs { flex: 1; padding: 10px 12px; overflow-y: auto; line-height: 1.6; }
+        .log-error { color: #FF453A; font-weight: normal; }
+        .log-info { color: #0A84FF; font-weight: normal; }
+
+        /* Modals */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--modal-overlay); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        .modal-content { background-color: var(--bg-card); width: 440px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: 1px solid var(--border-color); display: flex; flex-direction: column; overflow: hidden; transform: translateY(20px); transition: transform 0.2s; }
+        .modal-overlay.show .modal-content { transform: translateY(0); }
+        .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+        .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; max-height: 75vh; overflow-y: auto;}
+        .setting-group { display: flex; flex-direction: column; gap: 8px; }
+        .setting-group label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+        .setting-input { padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--cm-bg); color: var(--text-main); font-size: 14px; outline: none; }
+        .setting-input:focus { border-color: #007AFF; }
+        select.setting-input { cursor: pointer; appearance: auto; }
+        .res-container { display: flex; gap: 10px; align-items: center; }
+        .res-container span { color: var(--text-muted); }
+        
+        .ai-textarea { resize: none; height: 100px; font-family: inherit; line-height: 1.5; }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; }
+        .action-btn { background-color: #007AFF; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; text-align: center; transition: 0.2s; }
+        .action-btn:hover { background-color: #0056b3; }
+        .btn-outline { background-color: transparent; border: 1px solid var(--border-color); color: var(--text-main); }
+        .btn-outline:hover { background-color: var(--sidebar-hover); }
+        .close-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px; border-radius: 4px; }
+        .close-btn:hover { background-color: var(--sidebar-hover); color: var(--text-main); }
+
+        .search-result-item { padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 13px; cursor: pointer; transition: 0.2s; }
+        .search-result-item:hover { background-color: var(--sidebar-hover); }
+        .search-result-file { font-weight: 600; color: #007AFF; margin-bottom: 4px; }
+        .search-result-context { font-family: monospace; color: var(--text-muted); white-space: pre-wrap; word-break: break-all; }
+        .highlight { background-color: rgba(255, 255, 0, 0.4); color: #000; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-title">RTIDE</div>
+        <div class="header-actions">
+            <button onclick="openModal('settings-modal')"><i class="fas fa-cog"></i> Settings</button>
+        </div>
+    </header>
+
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>Project Settings</span>
+                <button class="close-btn" onclick="closeModal('settings-modal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>Project Name</label>
+                    <input type="text" id="project-name-input" class="setting-input" value="MyProject">
+                </div>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
+
+                <div class="setting-row">
+                    <label>Theme</label>
+                    <button class="header-actions btn-outline" style="padding: 6px 12px; border-radius: 6px; cursor: pointer;" onclick="toggleDarkMode()" id="theme-btn"><i class="fas fa-moon"></i> Dark Mode</button>
+                </div>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
+                <div class="setting-group">
+                    <label>AI Model</label>
+                    <select id="gemini-model-select" class="setting-input">
+                        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                        <option value="gemini-1.5-flash" selected>Gemini 1.5 Flash</option>
+                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                        <option value="gemini-pro">Gemini Pro</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>Gemini API Key</label>
+                    <input type="password" id="gemini-api-key" class="setting-input" placeholder="Enter API Key...">
+                </div>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
+                <div class="setting-group">
+                    <label>Desktop Resolution</label>
+                    <div class="res-container">
+                        <input type="number" id="desktop-w" class="setting-input res-input" style="flex:1">
+                        <span>x</span>
+                        <input type="number" id="desktop-h" class="setting-input res-input" style="flex:1">
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label>Tablet Resolution</label>
+                    <div class="res-container">
+                        <input type="number" id="tablet-w" class="setting-input res-input" style="flex:1">
+                        <span>x</span>
+                        <input type="number" id="tablet-h" class="setting-input res-input" style="flex:1">
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label>Mobile Resolution</label>
+                    <div class="res-container">
+                        <input type="number" id="mobile-w" class="setting-input res-input" style="flex:1">
+                        <span>x</span>
+                        <input type="number" id="mobile-h" class="setting-input res-input" style="flex:1">
+                    </div>
+                </div>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
+                
+                <div class="setting-group">
+                    <label>Export Options</label>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('html')">Export HTML</button>
+                        <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('css')">Export CSS</button>
+                        <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('js')">Export JS</button>
+                    </div>
+                    <button class="action-btn btn-outline" style="width: 100%; margin-top: 4px;" onclick="exportToFolder()"><i class="fas fa-folder-open"></i> Export Folder</button>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="action-btn" style="flex: 1; background-color: #34C759;" onclick="closeModal('settings-modal')"><i class="fas fa-check"></i> Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="ai-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>AI Assistant</span>
+                <button class="close-btn" onclick="closeModal('ai-modal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label id="ai-target-label">Target File</label>
+                    <textarea id="ai-prompt-input" class="setting-input ai-textarea" placeholder="Describe the changes or generation required..."></textarea>
+                </div>
+                <button class="action-btn ai-submit-btn" id="ai-submit-btn" style="background-color: var(--ai-accent);" onclick="askGemini()"><i class="fas fa-magic"></i> Generate & Replace</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="search-modal">
+        <div class="modal-content" style="width: 500px;">
+            <div class="modal-header">
+                <span>Global Search & Replace</span>
+                <button class="close-btn" onclick="closeModal('search-modal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <input type="text" id="search-input" class="setting-input" placeholder="Find..." onkeyup="performSearch()">
+                    <input type="text" id="replace-input" class="setting-input" placeholder="Replace with...">
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="action-btn btn-outline" style="flex: 1;" onclick="performSearch()"><i class="fas fa-search"></i> Find</button>
+                    <button class="action-btn" style="flex: 1;" onclick="performReplaceAll()">Replace All</button>
+                </div>
+                <div id="search-results" style="max-height: 300px; overflow-y: auto; background: var(--cm-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-workspace">
+        
+        <div class="panel sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <span>Explorer</span>
+                <div class="sidebar-actions">
+                    <i class="fas fa-file-medical" title="New File" onclick="createNewFile()"></i>
+                    <i class="fas fa-search" title="Global Search" onclick="openSearchModal()"></i>
+                </div>
+            </div>
+            <div class="file-list" id="file-list"></div>
+        </div>
+
+        <div class="resizer" id="resizer-left"></div>
+
+        <div class="panel editor-side" id="editor-side">
+            <div class="toolbar">
+                <div class="tabs" id="tabs"></div>
+                <div class="editor-tools">
+                    <button class="icon-btn ai-btn" onclick="openAiModal()"><i class="fas fa-robot"></i> AI 生成</button>
+                    <button class="icon-btn paste-btn" onclick="clearAndPaste()" title="一鍵清除並貼上剪貼簿 (Ctrl+Shift+V)"><i class="fas fa-paste"></i> 覆蓋貼上</button>
+                    <button class="icon-btn clear-btn" onclick="clearEditor()" title="一鍵清空當前檔案"><i class="fas fa-eraser"></i> 清空</button>
+                    <button class="icon-btn" onclick="editor.undo()"><i class="fas fa-undo"></i> 復原</button>
+                </div>
+            </div>
+            <textarea id="code-editor"></textarea>
+        </div>
+
+        <div class="resizer" id="resizer-right"></div>
+
+        <div class="panel preview-side">
+            <div class="toolbar">
+                <div style="display: flex; align-items: center;">
+                    <div class="device-buttons" id="device-buttons">
+                        <button class="active" onclick="setDevice('desktop')"><i class="fas fa-desktop"></i></button>
+                        <button onclick="setDevice('tablet')"><i class="fas fa-tablet-alt"></i></button>
+                        <button onclick="setDevice('mobile')"><i class="fas fa-mobile-alt"></i></button>
+                    </div>
+                    <div class="zoom-controls">
+                        <i class="fas fa-search-minus" style="font-size: 10px; color: var(--text-muted);"></i>
+                        <input type="range" id="zoom-slider" class="zoom-slider" min="0.1" max="2.5" step="0.05" value="1">
+                        <span id="zoom-label" class="zoom-label">100%</span>
+                    </div>
+                </div>
+                <button class="text-btn" onclick="updatePreview()"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+            
+            <div class="iframe-wrapper" id="iframe-wrapper">
+                <div class="pan-container" id="pan-container">
+                    <div class="device-frame" id="device-frame">
+                        <iframe id="preview-output"></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <div class="h-resizer" id="h-resizer"></div>
+
+            <div class="console-panel" id="console-panel">
+                <div class="console-header">
+                    <span>Terminal</span>
+                    <button class="text-btn" onclick="clearConsole()"><i class="fas fa-trash-alt"></i></button>
+                </div>
+                <div class="console-logs" id="console-logs"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/css/css.min.js"></script>
+
+    <script>
+        function logToConsole(message, isError = false, isInfo = false) {
+            const consoleLogs = document.getElementById('console-logs');
+            const logElement = document.createElement('div');
+            if (isError) {
+                logElement.className = 'log-error';
+                logElement.textContent = '[Error] ' + message;
+            } else if (isInfo) {
+                logElement.className = 'log-info';
+                logElement.textContent = '> ' + message;
+            } else {
+                logElement.textContent = '> ' + message;
+            }
+            consoleLogs.appendChild(logElement);
+            consoleLogs.scrollTop = consoleLogs.scrollHeight;
+        }
+
+        // ==========================================
+        // 一鍵清空 / 覆蓋貼上功能
+        // ==========================================
+        function clearEditor() { 
+            editor.setValue(''); 
+            editor.focus();
+            logToConsole('編輯器內容已清空。', false, true);
+        }
+
+        async function clearAndPaste() {
+            try {
+                const text = await navigator.clipboard.readText();
+                editor.setValue(text);
+                logToConsole('成功讀取剪貼簿並覆蓋程式碼。', false, true);
+            } catch (err) {
+                // 防呆：如果權限被擋，至少幫使用者清空並聚焦，讓他們手動 Ctrl+V
+                editor.setValue('');
+                editor.focus();
+                logToConsole('無法自動讀取剪貼簿，已為您清空畫面。請直接按 Ctrl+V (或 Cmd+V) 手動貼上。', false, true);
+            }
+        }
+
+        // ==========================================
+        // 核心系統初始化
+        // ==========================================
+        const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+            lineNumbers: true, 
+            lineWrapping: true, 
+            theme: 'default', 
+            undoDepth: 200,
+            extraKeys: {
+                "Shift-Ctrl-V": clearAndPaste,
+                "Shift-Cmd-V": clearAndPaste
+            }
+        });
+
+        const vfs = {
+            'index.html': { doc: CodeMirror.Doc(`<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>RTIDE</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="welcome">\n    <h1>RTIDE Initialized</h1>\n    <p>Professional workspace is ready.</p>\n  </div>\n  <script src="app.js"><\/script>\n</body>\n</html>`, 'xml') },
+            'style.css': { doc: CodeMirror.Doc(`body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f9f9f9; }\n.welcome { text-align: center; padding: 40px; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); line-height: 1.6; }`, 'css') },
+            'app.js': { doc: CodeMirror.Doc(`console.log("System Ready.");`, 'javascript') }
+        };
+
+        let currentFile = 'index.html';
+
+        function getFileIcon(filename) {
+            if (filename.endsWith('.html')) return '<i class="fab fa-html5" style="color: #E34F26;"></i>';
+            if (filename.endsWith('.css')) return '<i class="fab fa-css3-alt" style="color: #1572B6;"></i>';
+            if (filename.endsWith('.js')) return '<i class="fab fa-js" style="color: #F7DF1E;"></i>';
+            if (filename.endsWith('.json')) return '<i class="fas fa-brackets-curly" style="color: #859900;"></i>';
+            return '<i class="fas fa-file" style="color: var(--text-muted);"></i>';
+        }
+
+        function getCodeMirrorMode(filename) {
+            if (filename.endsWith('.html')) return 'xml';
+            if (filename.endsWith('.css')) return 'css';
+            if (filename.endsWith('.js') || filename.endsWith('.json')) return 'javascript';
+            return 'default';
+        }
+
+        function renderFileTree() {
+            const fileList = document.getElementById('file-list');
+            fileList.innerHTML = '';
+            Object.keys(vfs).sort().forEach(filename => {
+                const div = document.createElement('div');
+                div.className = `file-item ${filename === currentFile ? 'active' : ''}`;
+                div.innerHTML = `${getFileIcon(filename)} ${filename}`;
+                div.onclick = () => switchFile(filename);
+                fileList.appendChild(div);
+            });
+            renderTabs();
+        }
+
+        function renderTabs() {
+            const tabsContainer = document.getElementById('tabs');
+            tabsContainer.innerHTML = '';
+            Object.keys(vfs).sort().forEach(filename => {
+                const btn = document.createElement('button');
+                btn.className = `tab-btn ${filename === currentFile ? 'active' : ''}`;
+                btn.innerHTML = `${getFileIcon(filename)} ${filename}`;
+                btn.onclick = () => switchFile(filename);
+                tabsContainer.appendChild(btn);
+            });
+        }
+
+        function switchFile(filename) {
+            if (!vfs[filename]) return;
+            currentFile = filename;
+            editor.swapDoc(vfs[filename].doc);
+            document.getElementById('ai-target-label').textContent = `Target: ${filename}`;
+            renderFileTree();
+        }
+
+        function createNewFile() {
+            const filename = prompt("Enter new file name (e.g., script.js, about.html):");
+            if (!filename || filename.trim() === '') return;
+            const name = filename.trim();
+            if (vfs[name]) { alert("File already exists!"); return; }
+            
+            vfs[name] = { doc: CodeMirror.Doc('', getCodeMirrorMode(name)) };
+            vfs[name].doc.on('change', () => { clearTimeout(updateTimeout); updateTimeout = setTimeout(updatePreview, 800); });
+
+            switchFile(name); updatePreview();
+        }
+
+        Object.values(vfs).forEach(fileObj => {
+            fileObj.doc.on('change', () => { clearTimeout(updateTimeout); updateTimeout = setTimeout(updatePreview, 800); });
+        });
+
+        // ==========================================
+        // 虛擬打包引擎
+        // ==========================================
+        const previewOutput = document.getElementById('preview-output');
+        let updateTimeout;
+
+        function addLoopProtection(jsCode) {
+            const protectionSetup = `window.__scriptStartTime = Date.now();\n`;
+            const regex = /(for|while|do)\s*\([^\{]+\)\s*\{/g;
+            return protectionSetup + jsCode.replace(regex, (match) => { return `${match} if(Date.now() - window.__scriptStartTime > 1500) { throw new Error("Timeout"); }`; });
+        }
+
+        function getCombinedCode() {
+            let htmlContent = vfs['index.html'] ? vfs['index.html'].doc.getValue() : '<h1>Missing index.html</h1>';
+            const objectUrls = {};
+            
+            for (const [filename, fileObj] of Object.entries(vfs)) {
+                if (filename === 'index.html') continue;
+                let mimeType = 'text/plain';
+                let content = fileObj.doc.getValue();
+                
+                if (filename.endsWith('.css')) mimeType = 'text/css';
+                else if (filename.endsWith('.js')) { mimeType = 'text/javascript'; content = addLoopProtection(content); }
+                
+                const blob = new Blob([content], { type: mimeType });
+                objectUrls[filename] = URL.createObjectURL(blob);
+            }
+
+            for (const [filename, url] of Object.entries(objectUrls)) {
+                const regex = new RegExp(`(href|src)=["']\\.?\\/?${filename}["']`, 'g');
+                htmlContent = htmlContent.replace(regex, `$1="${url}"`);
+            }
+
+            const injectedJS = `<script>
+                window.onerror = function(message) { window.parent.postMessage({ type: 'error', msg: message }, '*'); return true; };
+                const originalConsole = console.log;
+                console.log = function(...args) { window.parent.postMessage({ type: 'log', args: args.map(a => typeof a === 'object' ? JSON.stringify(a) : a) }, '*'); originalConsole.apply(console, args); };
+            <\/script>`;
+            
+            htmlContent = htmlContent.replace('</head>', `${injectedJS}</head>`);
+            if(!htmlContent.includes('</head>')) htmlContent = injectedJS + htmlContent;
+
+            return htmlContent;
+        }
+
+        function updatePreview() { previewOutput.srcdoc = getCombinedCode(); }
+
+        window.addEventListener('message', (event) => {
+            if (!event.data || !event.data.type) return;
+            
+            if (event.data.type === 'pan-start') startPan(event.data.x, event.data.y);
+            if (event.data.type === 'pan-move') movePan(event.data.x, event.data.y);
+            if (event.data.type === 'pan-end') endPan();
+
+            if (event.data.type === 'log') {
+                logToConsole(event.data.args.join(' '));
+            } else if (event.data.type === 'error') {
+                logToConsole(event.data.msg, true);
+            }
+        });
+        function clearConsole() { document.getElementById('console-logs').innerHTML = ''; }
+
+        // ==========================================
+        // 全域搜尋
+        // ==========================================
+        function openSearchModal() {
+            document.getElementById('search-input').value = ''; document.getElementById('replace-input').value = '';
+            document.getElementById('search-results').style.display = 'none'; openModal('search-modal');
+            setTimeout(() => document.getElementById('search-input').focus(), 100);
+        }
+
+        function performSearch() {
+            const query = document.getElementById('search-input').value;
+            const resultsContainer = document.getElementById('search-results');
+            resultsContainer.innerHTML = '';
+            if (!query) { resultsContainer.style.display = 'none'; return; }
+            
+            let found = false;
+            for (const [filename, fileObj] of Object.entries(vfs)) {
+                const content = fileObj.doc.getValue();
+                if (content.includes(query)) {
+                    found = true;
+                    const item = document.createElement('div'); item.className = 'search-result-item';
+                    const idx = content.indexOf(query);
+                    const start = Math.max(0, idx - 20); const end = Math.min(content.length, idx + query.length + 20);
+                    let snippet = content.substring(start, end).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    const safeQuery = query.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    snippet = snippet.replace(safeQuery, `<span class="highlight">${safeQuery}</span>`);
+
+                    item.innerHTML = `<div class="search-result-file"><i class="fas fa-file-code"></i> ${filename}</div><div class="search-result-context">...${snippet}...</div>`;
+                    item.onclick = () => { switchFile(filename); closeModal('search-modal'); };
+                    resultsContainer.appendChild(item);
+                }
+            }
+            resultsContainer.style.display = found ? 'block' : 'none';
+            if(!found) resultsContainer.innerHTML = '<div style="color:var(--text-muted); padding:8px;">No results found.</div>';
+        }
+
+        function performReplaceAll() {
+            const query = document.getElementById('search-input').value;
+            const replacement = document.getElementById('replace-input').value;
+            if (!query) return;
+
+            let replaceCount = 0;
+            for (const [filename, fileObj] of Object.entries(vfs)) {
+                let content = fileObj.doc.getValue();
+                if (content.includes(query)) {
+                    let parts = content.split(query);
+                    replaceCount += parts.length - 1;
+                    fileObj.doc.setValue(parts.join(replacement));
+                }
+            }
+            alert(`Replaced ${replaceCount} occurrences.`); performSearch(); updatePreview();
+        }
+
+        // ==========================================
+        // 設定與匯出
+        // ==========================================
+        function openModal(id) { document.getElementById(id).classList.add('show'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+        const apiKeyInput = document.getElementById('gemini-api-key');
+        apiKeyInput.value = localStorage.getItem('geminiApiKey') || '';
+        apiKeyInput.addEventListener('input', (e) => { localStorage.setItem('geminiApiKey', e.target.value.trim()); });
+
+        const modelSelect = document.getElementById('gemini-model-select');
+        modelSelect.value = localStorage.getItem('geminiModel') || 'gemini-1.5-flash';
+        modelSelect.addEventListener('change', (e) => { localStorage.setItem('geminiModel', e.target.value); });
+
+        let resDesktop = JSON.parse(localStorage.getItem('resDesktop')) || { w: 1920, h: 1080 };
+        let resTablet = JSON.parse(localStorage.getItem('resTablet')) || { w: 820, h: 1180 };
+        let resMobile = JSON.parse(localStorage.getItem('resMobile')) || { w: 390, h: 844 };
+        
+        document.getElementById('desktop-w').value = resDesktop.w; document.getElementById('desktop-h').value = resDesktop.h;
+        document.getElementById('tablet-w').value = resTablet.w; document.getElementById('tablet-h').value = resTablet.h;
+        document.getElementById('mobile-w').value = resMobile.w; document.getElementById('mobile-h').value = resMobile.h;
+
+        function saveResolutions() {
+            resDesktop.w = parseInt(document.getElementById('desktop-w').value) || 1920; resDesktop.h = parseInt(document.getElementById('desktop-h').value) || 1080;
+            resTablet.w = parseInt(document.getElementById('tablet-w').value) || 820; resTablet.h = parseInt(document.getElementById('tablet-h').value) || 1180;
+            resMobile.w = parseInt(document.getElementById('mobile-w').value) || 390; resMobile.h = parseInt(document.getElementById('mobile-h').value) || 844;
+            
+            localStorage.setItem('resDesktop', JSON.stringify(resDesktop)); localStorage.setItem('resTablet', JSON.stringify(resTablet)); localStorage.setItem('resMobile', JSON.stringify(resMobile));
+            manualZoom = false; applyDeviceScale(); 
+        }
+        document.querySelectorAll('.res-input').forEach(input => input.addEventListener('change', saveResolutions));
+
+        let isDarkMode = false;
+        function toggleDarkMode() { isDarkMode = !isDarkMode; document.body.classList.toggle('dark-mode', isDarkMode); editor.setOption('theme', isDarkMode ? 'monokai' : 'default'); }
+
+        function exportSingleFile(type) {
+            let content = ''; let mimeType = 'text/plain';
+            if (type === 'html') { content = vfs['index.html']?.doc.getValue() || ''; mimeType = 'text/html'; }
+            else if (type === 'css') { content = vfs['style.css']?.doc.getValue() || ''; mimeType = 'text/css'; }
+            else if (type === 'js') { content = vfs['app.js']?.doc.getValue() || ''; mimeType = 'text/javascript'; }
+            
+            const inputName = document.getElementById('project-name-input').value.trim() || "Project";
+            const fileName = `${inputName}.${type}`;
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url);
+        }
+
+        let directoryHandle = null;
+        async function exportToFolder() {
+            try {
+                if (!directoryHandle) directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                const inputName = document.getElementById('project-name-input').value.trim() || "Project";
+                const projectDirHandle = await directoryHandle.getDirectoryHandle(inputName, { create: true });
+                
+                async function writeFile(dirHandle, filename, content) {
+                    const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(content); await writable.close();
+                }
+
+                for (const [filename, fileObj] of Object.entries(vfs)) {
+                    await writeFile(projectDirHandle, filename, fileObj.doc.getValue());
+                }
+
+                logToConsole(`Project exported to: ${inputName}`, false, true);
+                closeModal('settings-modal'); 
+            } catch (error) {
+                if (error.name === 'NotAllowedError') { alert('Export failed: Write permission denied.'); directoryHandle = null; } 
+                else if (error.name !== 'AbortError') { alert('Export failed: Browser support issue.'); }
+            }
+        }
+
+        // ==========================================
+        // AI 生成呼叫
+        // ==========================================
+        async function askGemini() {
+            const apiKey = apiKeyInput.value.trim();
+            const userPrompt = document.getElementById('ai-prompt-input').value.trim();
+            const submitBtn = document.getElementById('ai-submit-btn');
+            const currentCode = editor.getValue(); 
+            const selectedModel = modelSelect.value;
+
+            if (!apiKey) { alert('Please enter your Gemini API Key in Settings.'); closeModal('ai-modal'); openModal('settings-modal'); return; }
+            if (!userPrompt) return;
+
+            const fullPrompt = `You are an expert frontend developer.\nCurrent code in file [${currentFile}]:\n\`\`\`\n${currentCode}\n\`\`\`\nUser Request: "${userPrompt}"\nRequirements:\n1. Output the FULL updated code for this file. No partial snippets.\n2. Output purely code. NO markdown formatting blocks (like \`\`\`html) and NO explanatory text.`;
+
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...'; submitBtn.disabled = true;
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] })
+                });
+
+                if (!response.ok) {
+                    let detailedError = "Unknown API Error";
+                    try { const errData = await response.json(); detailedError = errData.error?.message || response.statusText; } catch (e) {}
+                    throw new Error(`[Status ${response.status}] ${detailedError}`);
+                }
+
+                const data = await response.json();
+                let generatedCode = data.candidates[0].content.parts[0].text;
+                generatedCode = generatedCode.replace(/^```[a-z]*\n/gm, '').replace(/```$/gm, '').trim();
+
+                editor.setValue(generatedCode); closeModal('ai-modal');
+            } catch (error) {
+                console.error("Gemini Error:", error); 
+                logToConsole(`Model [${selectedModel}] Failed: ${error.message}`, true);
+                alert(`API Call Failed! Check the terminal for details.`);
+            } finally {
+                submitBtn.innerHTML = '<i class="fas fa-magic"></i> Generate & Replace'; submitBtn.disabled = false;
+            }
+        }
+
+        // ==========================================
+        // 介面拖曳、平移與縮放
+        // ==========================================
+        const resizerLeft = document.getElementById('resizer-left');
+        const resizerRight = document.getElementById('resizer-right');
+        const sidebar = document.getElementById('sidebar');
+        const editorSide = document.getElementById('editor-side');
+        const hResizer = document.getElementById('h-resizer');
+        const consolePanel = document.getElementById('console-panel');
+        const panContainer = document.getElementById('pan-container');
+        const deviceFrame = document.getElementById('device-frame'); 
+        const iframeWrapper = document.getElementById('iframe-wrapper'); 
+        const buttons = document.querySelectorAll('#device-buttons button'); 
+        const zoomSlider = document.getElementById('zoom-slider');
+        const zoomLabel = document.getElementById('zoom-label');
+        
+        let isResizingLeft = false, isResizingRight = false, isHResizing = false;
+        let currentDeviceMode = 'desktop', manualZoom = false; 
+        let panX = 0, panY = 0, isPanning = false, startPanX = 0, startPanY = 0, mouseStartX = 0, mouseStartY = 0;
+
+        zoomSlider.addEventListener('input', (e) => {
+            manualZoom = true; const scale = parseFloat(e.target.value);
+            zoomLabel.textContent = `${Math.round(scale * 100)}%`;
+            deviceFrame.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        });
+
+        function applyDeviceScale() {
+            const wrapperWidth = iframeWrapper.clientWidth; const wrapperHeight = iframeWrapper.clientHeight;
+            let targetW = resDesktop.w, targetH = resDesktop.h;
+            if (currentDeviceMode === 'mobile') { targetW = resMobile.w; targetH = resMobile.h; } 
+            else if (currentDeviceMode === 'tablet') { targetW = resTablet.w; targetH = resTablet.h; } 
+
+            deviceFrame.style.width = `${targetW}px`; deviceFrame.style.height = `${targetH}px`;
+            let targetScale = Math.min((wrapperWidth - 60) / targetW, (wrapperHeight - 60) / targetH, 1);
+
+            if (!manualZoom) {
+                deviceFrame.style.transform = `translate(-50%, -50%) scale(${targetScale})`;
+                zoomSlider.value = targetScale; zoomLabel.textContent = `${Math.round(targetScale * 100)}%`;
+                panX = 0; panY = 0; panContainer.style.transform = `translate(0px, 0px)`;
+            } else {
+                deviceFrame.style.transform = `translate(-50%, -50%) scale(${parseFloat(zoomSlider.value)})`;
+            }
+        }
+
+        function setDevice(deviceType) { 
+            currentDeviceMode = deviceType;
+            buttons.forEach(btn => btn.classList.remove('active')); event.currentTarget.classList.add('active'); 
+            manualZoom = false; applyDeviceScale(); 
+        }
+
+        function startPan(x, y) { isPanning = true; mouseStartX = x; mouseStartY = y; startPanX = panX; startPanY = panY; iframeWrapper.style.cursor = 'grabbing'; deviceFrame.style.pointerEvents = 'none'; }
+        function movePan(x, y) { if (!isPanning) return; panX = startPanX + (x - mouseStartX); panY = startPanY + (y - mouseStartY); panContainer.style.transform = `translate(${panX}px, ${panY}px)`; }
+        function endPan() { if (isPanning) { isPanning = false; iframeWrapper.style.cursor = 'auto'; deviceFrame.style.pointerEvents = 'auto'; } }
+
+        iframeWrapper.addEventListener('mousedown', (e) => {
+            if (e.button === 1 || (e.button === 0 && e.altKey)) {
+                e.preventDefault(); startPan(e.screenX, e.screenY);
+            }
+        });
+
+        resizerLeft.addEventListener('mousedown', () => { isResizingLeft = true; resizerLeft.classList.add('active'); document.body.style.cursor = 'col-resize'; iframeWrapper.style.pointerEvents = 'none'; document.body.style.userSelect = 'none'; });
+        resizerRight.addEventListener('mousedown', () => { isResizingRight = true; resizerRight.classList.add('active'); document.body.style.cursor = 'col-resize'; iframeWrapper.style.pointerEvents = 'none'; document.body.style.userSelect = 'none'; });
+        hResizer.addEventListener('mousedown', () => { isHResizing = true; hResizer.classList.add('active'); document.body.style.cursor = 'row-resize'; iframeWrapper.style.pointerEvents = 'none'; document.body.style.userSelect = 'none'; });
+
+        window.addEventListener('mousemove', (e) => { 
+            if (isPanning) { movePan(e.screenX, e.screenY); return; }
+            
+            if (isResizingLeft) { 
+                const newWidth = Math.max(150, Math.min(e.clientX, 400));
+                sidebar.style.width = `${newWidth}px`; applyDeviceScale(); 
+            }
+            if (isResizingRight) { 
+                const sidebarW = sidebar.offsetWidth;
+                const newWidth = e.clientX - sidebarW;
+                if(newWidth > 150 && (window.innerWidth - e.clientX) > 150) {
+                    editorSide.style.width = `${newWidth}px`; editorSide.style.flex = 'none'; applyDeviceScale(); 
+                }
+            }
+            if (isHResizing) { 
+                const previewContainer = document.querySelector('.preview-side').getBoundingClientRect();
+                const newHeight = previewContainer.bottom - e.clientY;
+                if(newHeight > 40 && newHeight < previewContainer.height - 100) { 
+                    consolePanel.style.height = `${newHeight}px`; applyDeviceScale(); 
+                }
+            }
+        });
+
+        window.addEventListener('mouseup', () => { 
+            endPan();
+            if(isResizingLeft || isResizingRight || isHResizing) { 
+                isResizingLeft = false; isResizingRight = false; isHResizing = false;
+                resizerLeft.classList.remove('active'); resizerRight.classList.remove('active'); hResizer.classList.remove('active');
+                document.body.style.cursor = 'default'; iframeWrapper.style.pointerEvents = 'auto'; document.body.style.userSelect = 'auto';
+            } 
+        });
+
+        window.addEventListener('resize', applyDeviceScale);
+        
+        // Initial Mount
+        editor.swapDoc(vfs['index.html'].doc);
+        renderFileTree();
+        updatePreview(); 
+        applyDeviceScale();
+    </script>
+</body>
+</html>
