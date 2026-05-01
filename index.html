@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RTIDE - Professional Workspace</title>
+    <title>CYIDE - Professional Workspace</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/monokai.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
         :root {
@@ -17,6 +16,7 @@
             --console-bg: #2C2C2E; --console-text: #34C759; --modal-overlay: rgba(0, 0, 0, 0.4);
             --ai-accent: #A020F0; --sidebar-bg: #F0F0F3; --sidebar-hover: #E5E5EA;
             --sidebar-active: #007AFF; --sidebar-active-text: #FFFFFF;
+            --scrollbar-bg: #F5F5F7; --scrollbar-thumb: #C7C7CC;
         }
         body.dark-mode {
             --bg-body: #000000; --bg-header: rgba(28, 28, 30, 0.9); --bg-card: #1C1C1E;
@@ -25,7 +25,15 @@
             --console-bg: #111111; --modal-overlay: rgba(0, 0, 0, 0.7);
             --ai-accent: #BF5AF2; --sidebar-bg: #111111; --sidebar-hover: #2C2C2E;
             --sidebar-active: #0A84FF; --sidebar-active-text: #FFFFFF;
+            --scrollbar-bg: #000000; --scrollbar-thumb: #48484A;
         }
+
+        /* 主題化捲軸 */
+        ::-webkit-scrollbar { width: 12px; height: 12px; }
+        ::-webkit-scrollbar-track { background: var(--scrollbar-bg); border-radius: 6px; }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 6px; border: 3px solid var(--scrollbar-bg); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
         body {
             margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-body); color: var(--text-main);
@@ -36,32 +44,31 @@
             background-color: var(--bg-header); backdrop-filter: blur(10px); padding: 12px 24px;
             display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); z-index: 10;
         }
-        .header-title { font-weight: 800; font-size: 18px; letter-spacing: 0.5px; background: linear-gradient(45deg, #007AFF, #A020F0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .header-actions button {
-            background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color);
-            padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: 0.2s;
+        .header-title { 
+            font-weight: 800; font-size: 18px; letter-spacing: 0.5px; 
+            background: linear-gradient(45deg, #007AFF, #A020F0); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            display: flex; align-items: baseline; gap: 12px;
         }
-        .header-actions button:hover { background-color: var(--border-color); }
+        .header-subtitle { font-size: 11px; font-weight: 500; color: var(--text-muted); -webkit-text-fill-color: var(--text-muted); letter-spacing: 1px; }
 
         .main-workspace { display: flex; flex: 1; overflow: hidden; padding: 12px; gap: 4px; }
-        .panel {
-            background-color: var(--bg-card); border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
-            display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color);
-        }
+        .panel { background-color: var(--bg-card); border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color); }
         
-        /* Sidebar Styles */
         .sidebar { width: 200px; background-color: var(--sidebar-bg); flex-shrink: 0; }
         .sidebar-header { padding: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
-        .sidebar-actions i { cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; }
-        .sidebar-actions i:hover { background-color: var(--sidebar-hover); color: var(--text-main); }
+        .sidebar-actions span { cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: 0.2s; font-size: 11px; }
+        .sidebar-actions span:hover { background-color: var(--sidebar-hover); color: var(--text-main); }
         .file-list { flex: 1; overflow-y: auto; padding: 8px 0; }
         .file-item { padding: 6px 16px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 8px; color: var(--text-main); transition: 0.2s; }
         .file-item:hover { background-color: var(--sidebar-hover); }
         .file-item.active { background-color: var(--sidebar-active); color: var(--sidebar-active-text); }
-        .file-item.active i { color: var(--sidebar-active-text) !important; }
         
         .editor-side { flex: 1; min-width: 0; }
-        .preview-side { flex: 1; min-width: 0; position: relative; }
+        .preview-side { flex: 1; min-width: 0; position: relative; transition: all 0.3s; }
+        
+        /* 全螢幕模式 */
+        .preview-side.fullscreen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100; border-radius: 0; border: none; }
+        .preview-side.fullscreen .h-resizer, .preview-side.fullscreen .console-panel { display: none !important; }
         
         .resizer { width: 12px; cursor: col-resize; display: flex; justify-content: center; align-items: center; transition: background-color 0.2s; border-radius: 6px; z-index: 20; flex-shrink: 0; }
         .resizer:hover, .resizer.active { background-color: var(--border-color); }
@@ -80,6 +87,7 @@
         .editor-tools { display: flex; gap: 6px; flex-shrink: 0; margin-left: 12px; }
         .icon-btn { background: transparent; border: 1px solid transparent; color: var(--text-muted); padding: 4px 8px; cursor: pointer; border-radius: 4px; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 4px; }
         .icon-btn:hover { background-color: var(--btn-bg); color: var(--text-main); border-color: var(--border-color); }
+        .icon-btn.active { background-color: var(--bg-body); color: #007AFF; border-color: var(--border-color); }
         .ai-btn { color: var(--ai-accent); border: 1px solid rgba(160, 32, 240, 0.3); }
         .ai-btn:hover { background-color: rgba(160, 32, 240, 0.1); color: var(--ai-accent); border-color: var(--ai-accent); }
         .paste-btn:hover { background-color: rgba(0, 122, 255, 0.1); color: #007AFF; border-color: #007AFF; }
@@ -99,7 +107,7 @@
         .CodeMirror { flex: 1; font-family: 'SF Mono', Consolas, monospace; font-size: 14px; background-color: var(--cm-bg); color: var(--text-main); }
         .CodeMirror-gutters { background-color: var(--cm-gutter); border-right: 1px solid var(--border-color); }
         
-        .iframe-wrapper { flex: 1; position: relative; background-color: var(--bg-body); overflow: hidden; }
+        .iframe-wrapper { flex: 1; position: relative; background-color: var(--bg-body); overflow: auto; }
         .pan-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform-origin: center; overflow: visible; }
         .device-frame { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(1);
@@ -114,6 +122,16 @@
         .console-logs { flex: 1; padding: 10px 12px; overflow-y: auto; line-height: 1.6; }
         .log-error { color: #FF453A; font-weight: normal; }
         .log-info { color: #0A84FF; font-weight: normal; }
+
+        /* Floating Settings Button (移至左下角) */
+        .floating-settings-btn {
+            position: fixed; bottom: 24px; left: 24px;
+            background-color: var(--bg-card); color: var(--text-main);
+            border: 1px solid var(--border-color); border-radius: 24px;
+            padding: 0 20px; height: 48px; display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); cursor: pointer; z-index: 90; transition: 0.2s; font-size: 14px; font-weight: 600;
+        }
+        .floating-settings-btn:hover { background-color: var(--btn-bg); transform: scale(1.02); }
 
         /* Modals */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--modal-overlay); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
@@ -136,7 +154,7 @@
         .action-btn:hover { background-color: #0056b3; }
         .btn-outline { background-color: transparent; border: 1px solid var(--border-color); color: var(--text-main); }
         .btn-outline:hover { background-color: var(--sidebar-hover); }
-        .close-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px; border-radius: 4px; }
+        .close-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; font-weight: bold; line-height: 1; padding: 4px 8px; border-radius: 4px; }
         .close-btn:hover { background-color: var(--sidebar-hover); color: var(--text-main); }
 
         .search-result-item { padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 13px; cursor: pointer; transition: 0.2s; }
@@ -149,32 +167,33 @@
 <body>
 
     <header>
-        <div class="header-title">RTIDE</div>
-        <div class="header-actions">
-            <button onclick="openModal('settings-modal')"><i class="fas fa-cog"></i> Settings</button>
-        </div>
+        <div class="header-title">CYIDE <span class="header-subtitle">CYIDE DESIGN BY CYLIN</span></div>
     </header>
 
+    <!-- 浮動設定按鈕 -->
+    <button class="floating-settings-btn" onclick="openModal('settings-modal')">設定</button>
+
+    <!-- Settings Modal -->
     <div class="modal-overlay" id="settings-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <span>Project Settings</span>
-                <button class="close-btn" onclick="closeModal('settings-modal')"><i class="fas fa-times"></i></button>
+                <span>專案與環境設定</span>
+                <button class="close-btn" onclick="closeModal('settings-modal')">X</button>
             </div>
             <div class="modal-body">
                 <div class="setting-group">
-                    <label>Project Name</label>
-                    <input type="text" id="project-name-input" class="setting-input" value="MyProject">
+                    <label>專案名稱</label>
+                    <input type="text" id="project-name-input" class="setting-input" value="index">
                 </div>
                 <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
 
                 <div class="setting-row">
-                    <label>Theme</label>
-                    <button class="header-actions btn-outline" style="padding: 6px 12px; border-radius: 6px; cursor: pointer;" onclick="toggleDarkMode()" id="theme-btn"><i class="fas fa-moon"></i> Dark Mode</button>
+                    <label>外觀主題</label>
+                    <button class="header-actions btn-outline" style="padding: 6px 12px; border-radius: 6px; cursor: pointer;" onclick="toggleDarkMode()" id="theme-btn">切換深色模式</button>
                 </div>
                 <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
                 <div class="setting-group">
-                    <label>AI Model</label>
+                    <label>選擇 AI 模型</label>
                     <select id="gemini-model-select" class="setting-input">
                         <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
                         <option value="gemini-1.5-flash" selected>Gemini 1.5 Flash</option>
@@ -184,11 +203,11 @@
                 </div>
                 <div class="setting-group">
                     <label>Gemini API Key</label>
-                    <input type="password" id="gemini-api-key" class="setting-input" placeholder="Enter API Key...">
+                    <input type="password" id="gemini-api-key" class="setting-input" placeholder="請輸入 API Key...">
                 </div>
                 <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
                 <div class="setting-group">
-                    <label>Desktop Resolution</label>
+                    <label>電腦解析度 (寬 x 高)</label>
                     <div class="res-container">
                         <input type="number" id="desktop-w" class="setting-input res-input" style="flex:1">
                         <span>x</span>
@@ -196,7 +215,7 @@
                     </div>
                 </div>
                 <div class="setting-group">
-                    <label>Tablet Resolution</label>
+                    <label>平板解析度 (寬 x 高)</label>
                     <div class="res-container">
                         <input type="number" id="tablet-w" class="setting-input res-input" style="flex:1">
                         <span>x</span>
@@ -204,7 +223,7 @@
                     </div>
                 </div>
                 <div class="setting-group">
-                    <label>Mobile Resolution</label>
+                    <label>手機解析度 (寬 x 高)</label>
                     <div class="res-container">
                         <input type="number" id="mobile-w" class="setting-input res-input" style="flex:1">
                         <span>x</span>
@@ -214,52 +233,54 @@
                 <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
                 
                 <div class="setting-group">
-                    <label>Export Options</label>
+                    <label>匯出專案檔案</label>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('html')">Export HTML</button>
-                        <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('css')">Export CSS</button>
-                        <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('js')">Export JS</button>
+                        <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('html')">匯出 HTML</button>
+                        <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('css')">匯出 CSS</button>
+                        <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('js')">匯出 JS</button>
                     </div>
-                    <button class="action-btn btn-outline" style="width: 100%; margin-top: 4px;" onclick="exportToFolder()"><i class="fas fa-folder-open"></i> Export Folder</button>
+                    <button class="action-btn btn-outline" style="width: 100%; margin-top: 4px;" onclick="exportToFolder()">匯出整個資料夾</button>
                 </div>
                 
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button class="action-btn" style="flex: 1; background-color: #34C759;" onclick="closeModal('settings-modal')"><i class="fas fa-check"></i> Done</button>
+                    <button class="action-btn" style="flex: 1; background-color: #34C759;" onclick="closeModal('settings-modal')">完成設定</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- AI Prompt Modal -->
     <div class="modal-overlay" id="ai-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <span>AI Assistant</span>
-                <button class="close-btn" onclick="closeModal('ai-modal')"><i class="fas fa-times"></i></button>
+                <span>呼叫 CYIDE 助手</span>
+                <button class="close-btn" onclick="closeModal('ai-modal')">X</button>
             </div>
             <div class="modal-body">
                 <div class="setting-group">
-                    <label id="ai-target-label">Target File</label>
-                    <textarea id="ai-prompt-input" class="setting-input ai-textarea" placeholder="Describe the changes or generation required..."></textarea>
+                    <label id="ai-target-label">目標檔案</label>
+                    <textarea id="ai-prompt-input" class="setting-input ai-textarea" placeholder="請描述您需要生成或修改的程式碼需求..."></textarea>
                 </div>
-                <button class="action-btn ai-submit-btn" id="ai-submit-btn" style="background-color: var(--ai-accent);" onclick="askGemini()"><i class="fas fa-magic"></i> Generate & Replace</button>
+                <button class="action-btn ai-submit-btn" id="ai-submit-btn" style="background-color: var(--ai-accent);" onclick="askGemini()">生成並取代</button>
             </div>
         </div>
     </div>
 
+    <!-- Global Search Modal -->
     <div class="modal-overlay" id="search-modal">
         <div class="modal-content" style="width: 500px;">
             <div class="modal-header">
-                <span>Global Search & Replace</span>
-                <button class="close-btn" onclick="closeModal('search-modal')"><i class="fas fa-times"></i></button>
+                <span>全域搜尋與替換</span>
+                <button class="close-btn" onclick="closeModal('search-modal')">X</button>
             </div>
             <div class="modal-body">
                 <div class="setting-group">
-                    <input type="text" id="search-input" class="setting-input" placeholder="Find..." onkeyup="performSearch()">
-                    <input type="text" id="replace-input" class="setting-input" placeholder="Replace with...">
+                    <input type="text" id="search-input" class="setting-input" placeholder="尋找..." onkeyup="performSearch()">
+                    <input type="text" id="replace-input" class="setting-input" placeholder="替換為...">
                 </div>
                 <div style="display: flex; gap: 8px;">
-                    <button class="action-btn btn-outline" style="flex: 1;" onclick="performSearch()"><i class="fas fa-search"></i> Find</button>
-                    <button class="action-btn" style="flex: 1;" onclick="performReplaceAll()">Replace All</button>
+                    <button class="action-btn btn-outline" style="flex: 1;" onclick="performSearch()">尋找</button>
+                    <button class="action-btn" style="flex: 1;" onclick="performReplaceAll()">全部替換</button>
                 </div>
                 <div id="search-results" style="max-height: 300px; overflow-y: auto; background: var(--cm-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; display: none;"></div>
             </div>
@@ -270,10 +291,10 @@
         
         <div class="panel sidebar" id="sidebar">
             <div class="sidebar-header">
-                <span>Explorer</span>
+                <span>檔案總管</span>
                 <div class="sidebar-actions">
-                    <i class="fas fa-file-medical" title="New File" onclick="createNewFile()"></i>
-                    <i class="fas fa-search" title="Global Search" onclick="openSearchModal()"></i>
+                    <span title="新增檔案" onclick="createNewFile()">新增</span>
+                    <span title="全域搜尋" onclick="openSearchModal()">搜尋</span>
                 </div>
             </div>
             <div class="file-list" id="file-list"></div>
@@ -285,10 +306,10 @@
             <div class="toolbar">
                 <div class="tabs" id="tabs"></div>
                 <div class="editor-tools">
-                    <button class="icon-btn ai-btn" onclick="openAiModal()"><i class="fas fa-robot"></i> AI 生成</button>
-                    <button class="icon-btn paste-btn" onclick="clearAndPaste()" title="一鍵清除並貼上剪貼簿 (Ctrl+Shift+V)"><i class="fas fa-paste"></i> 覆蓋貼上</button>
-                    <button class="icon-btn clear-btn" onclick="clearEditor()" title="一鍵清空當前檔案"><i class="fas fa-eraser"></i> 清空</button>
-                    <button class="icon-btn" onclick="editor.undo()"><i class="fas fa-undo"></i> 復原</button>
+                    <button class="icon-btn ai-btn" onclick="openAiModal()">AI 生成</button>
+                    <button class="icon-btn paste-btn" onclick="clearAndPaste()" title="一鍵清除並貼上剪貼簿 (Ctrl+Shift+V)">覆蓋貼上</button>
+                    <button class="icon-btn clear-btn" onclick="clearEditor()" title="一鍵清空當前檔案">清空</button>
+                    <button class="icon-btn" onclick="editor.undo()">復原</button>
                 </div>
             </div>
             <textarea id="code-editor"></textarea>
@@ -296,21 +317,26 @@
 
         <div class="resizer" id="resizer-right"></div>
 
-        <div class="panel preview-side">
+        <div class="panel preview-side" id="preview-panel">
             <div class="toolbar">
-                <div style="display: flex; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 8px;">
                     <div class="device-buttons" id="device-buttons">
-                        <button class="active" onclick="setDevice('desktop')"><i class="fas fa-desktop"></i></button>
-                        <button onclick="setDevice('tablet')"><i class="fas fa-tablet-alt"></i></button>
-                        <button onclick="setDevice('mobile')"><i class="fas fa-mobile-alt"></i></button>
+                        <button class="active" onclick="setDevice('desktop')">電腦</button>
+                        <button onclick="setDevice('tablet')">平板</button>
+                        <button onclick="setDevice('mobile')">手機</button>
                     </div>
+                    <button class="icon-btn" id="pan-mode-btn" onclick="togglePanMode()" title="移動模式 (開啟後避免點擊模擬畫面)">移動模式</button>
+                    
                     <div class="zoom-controls">
-                        <i class="fas fa-search-minus" style="font-size: 10px; color: var(--text-muted);"></i>
+                        <span style="font-size: 12px; color: var(--text-muted);">縮放</span>
                         <input type="range" id="zoom-slider" class="zoom-slider" min="0.1" max="2.5" step="0.05" value="1">
                         <span id="zoom-label" class="zoom-label">100%</span>
                     </div>
                 </div>
-                <button class="text-btn" onclick="updatePreview()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                <div style="display: flex; gap: 4px;">
+                    <button class="text-btn" onclick="updatePreview()" title="重新整理">重新整理</button>
+                    <button class="text-btn" onclick="toggleFullscreen()" title="全螢幕模式 (ESC退出)">全螢幕</button>
+                </div>
             </div>
             
             <div class="iframe-wrapper" id="iframe-wrapper">
@@ -325,8 +351,8 @@
 
             <div class="console-panel" id="console-panel">
                 <div class="console-header">
-                    <span>Terminal</span>
-                    <button class="text-btn" onclick="clearConsole()"><i class="fas fa-trash-alt"></i></button>
+                    <span>終端機 Console</span>
+                    <button class="text-btn" onclick="clearConsole()">清空</button>
                 </div>
                 <div class="console-logs" id="console-logs"></div>
             </div>
@@ -370,7 +396,6 @@
                 editor.setValue(text);
                 logToConsole('成功讀取剪貼簿並覆蓋程式碼。', false, true);
             } catch (err) {
-                // 防呆：如果權限被擋，至少幫使用者清空並聚焦，讓他們手動 Ctrl+V
                 editor.setValue('');
                 editor.focus();
                 logToConsole('無法自動讀取剪貼簿，已為您清空畫面。請直接按 Ctrl+V (或 Cmd+V) 手動貼上。', false, true);
@@ -392,20 +417,12 @@
         });
 
         const vfs = {
-            'index.html': { doc: CodeMirror.Doc(`<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>RTIDE</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="welcome">\n    <h1>RTIDE Initialized</h1>\n    <p>Professional workspace is ready.</p>\n  </div>\n  <script src="app.js"><\/script>\n</body>\n</html>`, 'xml') },
+            'index.html': { doc: CodeMirror.Doc(`<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>CYIDE</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="welcome">\n    <h1>CYIDE Initialized</h1>\n    <p>Professional workspace is ready.</p>\n  </div>\n  <script src="app.js"><\/script>\n</body>\n</html>`, 'xml') },
             'style.css': { doc: CodeMirror.Doc(`body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f9f9f9; }\n.welcome { text-align: center; padding: 40px; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); line-height: 1.6; }`, 'css') },
             'app.js': { doc: CodeMirror.Doc(`console.log("System Ready.");`, 'javascript') }
         };
 
         let currentFile = 'index.html';
-
-        function getFileIcon(filename) {
-            if (filename.endsWith('.html')) return '<i class="fab fa-html5" style="color: #E34F26;"></i>';
-            if (filename.endsWith('.css')) return '<i class="fab fa-css3-alt" style="color: #1572B6;"></i>';
-            if (filename.endsWith('.js')) return '<i class="fab fa-js" style="color: #F7DF1E;"></i>';
-            if (filename.endsWith('.json')) return '<i class="fas fa-brackets-curly" style="color: #859900;"></i>';
-            return '<i class="fas fa-file" style="color: var(--text-muted);"></i>';
-        }
 
         function getCodeMirrorMode(filename) {
             if (filename.endsWith('.html')) return 'xml';
@@ -420,7 +437,7 @@
             Object.keys(vfs).sort().forEach(filename => {
                 const div = document.createElement('div');
                 div.className = `file-item ${filename === currentFile ? 'active' : ''}`;
-                div.innerHTML = `${getFileIcon(filename)} ${filename}`;
+                div.innerHTML = filename;
                 div.onclick = () => switchFile(filename);
                 fileList.appendChild(div);
             });
@@ -433,7 +450,7 @@
             Object.keys(vfs).sort().forEach(filename => {
                 const btn = document.createElement('button');
                 btn.className = `tab-btn ${filename === currentFile ? 'active' : ''}`;
-                btn.innerHTML = `${getFileIcon(filename)} ${filename}`;
+                btn.innerHTML = filename;
                 btn.onclick = () => switchFile(filename);
                 tabsContainer.appendChild(btn);
             });
@@ -443,15 +460,15 @@
             if (!vfs[filename]) return;
             currentFile = filename;
             editor.swapDoc(vfs[filename].doc);
-            document.getElementById('ai-target-label').textContent = `Target: ${filename}`;
+            document.getElementById('ai-target-label').textContent = `目標檔案: ${filename}`;
             renderFileTree();
         }
 
         function createNewFile() {
-            const filename = prompt("Enter new file name (e.g., script.js, about.html):");
+            const filename = prompt("請輸入新檔案名稱 (例如: script.js, about.html):");
             if (!filename || filename.trim() === '') return;
             const name = filename.trim();
-            if (vfs[name]) { alert("File already exists!"); return; }
+            if (vfs[name]) { alert("此檔案已經存在！"); return; }
             
             vfs[name] = { doc: CodeMirror.Doc('', getCodeMirrorMode(name)) };
             vfs[name].doc.on('change', () => { clearTimeout(updateTimeout); updateTimeout = setTimeout(updatePreview, 800); });
@@ -552,13 +569,13 @@
                     const safeQuery = query.replace(/</g, "&lt;").replace(/>/g, "&gt;");
                     snippet = snippet.replace(safeQuery, `<span class="highlight">${safeQuery}</span>`);
 
-                    item.innerHTML = `<div class="search-result-file"><i class="fas fa-file-code"></i> ${filename}</div><div class="search-result-context">...${snippet}...</div>`;
+                    item.innerHTML = `<div class="search-result-file">${filename}</div><div class="search-result-context">...${snippet}...</div>`;
                     item.onclick = () => { switchFile(filename); closeModal('search-modal'); };
                     resultsContainer.appendChild(item);
                 }
             }
             resultsContainer.style.display = found ? 'block' : 'none';
-            if(!found) resultsContainer.innerHTML = '<div style="color:var(--text-muted); padding:8px;">No results found.</div>';
+            if(!found) resultsContainer.innerHTML = '<div style="color:var(--text-muted); padding:8px;">沒有找到符合的結果。</div>';
         }
 
         function performReplaceAll() {
@@ -575,7 +592,7 @@
                     fileObj.doc.setValue(parts.join(replacement));
                 }
             }
-            alert(`Replaced ${replaceCount} occurrences.`); performSearch(); updatePreview();
+            alert(`已成功替換 ${replaceCount} 個項目。`); performSearch(); updatePreview();
         }
 
         // ==========================================
@@ -619,7 +636,7 @@
             else if (type === 'css') { content = vfs['style.css']?.doc.getValue() || ''; mimeType = 'text/css'; }
             else if (type === 'js') { content = vfs['app.js']?.doc.getValue() || ''; mimeType = 'text/javascript'; }
             
-            const inputName = document.getElementById('project-name-input').value.trim() || "Project";
+            const inputName = document.getElementById('project-name-input').value.trim() || "index";
             const fileName = `${inputName}.${type}`;
             const blob = new Blob([content], { type: mimeType });
             const url = URL.createObjectURL(blob);
@@ -630,7 +647,7 @@
         async function exportToFolder() {
             try {
                 if (!directoryHandle) directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-                const inputName = document.getElementById('project-name-input').value.trim() || "Project";
+                const inputName = document.getElementById('project-name-input').value.trim() || "index";
                 const projectDirHandle = await directoryHandle.getDirectoryHandle(inputName, { create: true });
                 
                 async function writeFile(dirHandle, filename, content) {
@@ -643,11 +660,11 @@
                     await writeFile(projectDirHandle, filename, fileObj.doc.getValue());
                 }
 
-                logToConsole(`Project exported to: ${inputName}`, false, true);
+                logToConsole(`專案已成功匯出至：${inputName}`, false, true);
                 closeModal('settings-modal'); 
             } catch (error) {
-                if (error.name === 'NotAllowedError') { alert('Export failed: Write permission denied.'); directoryHandle = null; } 
-                else if (error.name !== 'AbortError') { alert('Export failed: Browser support issue.'); }
+                if (error.name === 'NotAllowedError') { alert('匯出失敗：未取得寫入權限。'); directoryHandle = null; } 
+                else if (error.name !== 'AbortError') { alert('匯出失敗：瀏覽器不支援此功能。'); }
             }
         }
 
@@ -661,12 +678,12 @@
             const currentCode = editor.getValue(); 
             const selectedModel = modelSelect.value;
 
-            if (!apiKey) { alert('Please enter your Gemini API Key in Settings.'); closeModal('ai-modal'); openModal('settings-modal'); return; }
+            if (!apiKey) { alert('請先在設定中輸入您的 Gemini API Key。'); closeModal('ai-modal'); openModal('settings-modal'); return; }
             if (!userPrompt) return;
 
-            const fullPrompt = `You are an expert frontend developer.\nCurrent code in file [${currentFile}]:\n\`\`\`\n${currentCode}\n\`\`\`\nUser Request: "${userPrompt}"\nRequirements:\n1. Output the FULL updated code for this file. No partial snippets.\n2. Output purely code. NO markdown formatting blocks (like \`\`\`html) and NO explanatory text.`;
+            const fullPrompt = `你是一個專業的前端開發助手。\n目前 ${currentFile} 分頁中的程式碼如下：\n\`\`\`\n${currentCode}\n\`\`\`\n使用者的需求是：「${userPrompt}」\n請根據現有程式碼的架構來完成需求。\n嚴格規定：\n1. 請直接輸出修改或新增後的【完整 ${currentFile} 程式碼】，不要只給片段。\n2. 『只』輸出純粹的程式碼內容，絕對不要包含 markdown 區塊標記 (例如 \`\`\`html) ，也不要任何開頭或結尾的解釋文字。`;
 
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...'; submitBtn.disabled = true;
+            submitBtn.innerHTML = '處理中...'; submitBtn.disabled = true;
 
             try {
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
@@ -675,9 +692,9 @@
                 });
 
                 if (!response.ok) {
-                    let detailedError = "Unknown API Error";
+                    let detailedError = "未知的 API 錯誤";
                     try { const errData = await response.json(); detailedError = errData.error?.message || response.statusText; } catch (e) {}
-                    throw new Error(`[Status ${response.status}] ${detailedError}`);
+                    throw new Error(`[代碼 ${response.status}] ${detailedError}`);
                 }
 
                 const data = await response.json();
@@ -687,15 +704,15 @@
                 editor.setValue(generatedCode); closeModal('ai-modal');
             } catch (error) {
                 console.error("Gemini Error:", error); 
-                logToConsole(`Model [${selectedModel}] Failed: ${error.message}`, true);
-                alert(`API Call Failed! Check the terminal for details.`);
+                logToConsole(`模型 [${selectedModel}] 呼叫失敗: ${error.message}`, true);
+                alert(`API 呼叫失敗！請檢查右下角終端機了解詳情。`);
             } finally {
-                submitBtn.innerHTML = '<i class="fas fa-magic"></i> Generate & Replace'; submitBtn.disabled = false;
+                submitBtn.innerHTML = '生成並取代'; submitBtn.disabled = false;
             }
         }
 
         // ==========================================
-        // 介面拖曳、平移與縮放
+        // 介面拖曳、平移、全螢幕與縮放
         // ==========================================
         const resizerLeft = document.getElementById('resizer-left');
         const resizerRight = document.getElementById('resizer-right');
@@ -709,10 +726,36 @@
         const buttons = document.querySelectorAll('#device-buttons button'); 
         const zoomSlider = document.getElementById('zoom-slider');
         const zoomLabel = document.getElementById('zoom-label');
+        const previewPanel = document.getElementById('preview-panel');
         
         let isResizingLeft = false, isResizingRight = false, isHResizing = false;
         let currentDeviceMode = 'desktop', manualZoom = false; 
         let panX = 0, panY = 0, isPanning = false, startPanX = 0, startPanY = 0, mouseStartX = 0, mouseStartY = 0;
+        let isSafePanMode = false;
+
+        function toggleFullscreen() {
+            previewPanel.classList.toggle('fullscreen');
+            applyDeviceScale();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && previewPanel.classList.contains('fullscreen')) {
+                previewPanel.classList.remove('fullscreen');
+                applyDeviceScale();
+            }
+        });
+
+        function togglePanMode() {
+            isSafePanMode = !isSafePanMode;
+            const btn = document.getElementById('pan-mode-btn');
+            if (isSafePanMode) {
+                btn.classList.add('active');
+                deviceFrame.style.pointerEvents = 'none'; 
+            } else {
+                btn.classList.remove('active');
+                deviceFrame.style.pointerEvents = 'auto';
+            }
+        }
 
         zoomSlider.addEventListener('input', (e) => {
             manualZoom = true; const scale = parseFloat(e.target.value);
@@ -744,12 +787,26 @@
             manualZoom = false; applyDeviceScale(); 
         }
 
-        function startPan(x, y) { isPanning = true; mouseStartX = x; mouseStartY = y; startPanX = panX; startPanY = panY; iframeWrapper.style.cursor = 'grabbing'; deviceFrame.style.pointerEvents = 'none'; }
-        function movePan(x, y) { if (!isPanning) return; panX = startPanX + (x - mouseStartX); panY = startPanY + (y - mouseStartY); panContainer.style.transform = `translate(${panX}px, ${panY}px)`; }
-        function endPan() { if (isPanning) { isPanning = false; iframeWrapper.style.cursor = 'auto'; deviceFrame.style.pointerEvents = 'auto'; } }
+        function startPan(x, y) { 
+            isPanning = true; mouseStartX = x; mouseStartY = y; startPanX = panX; startPanY = panY; 
+            iframeWrapper.style.cursor = 'grabbing'; 
+            deviceFrame.style.pointerEvents = 'none'; 
+        }
+        function movePan(x, y) { 
+            if (!isPanning) return; 
+            panX = startPanX + (x - mouseStartX); panY = startPanY + (y - mouseStartY); 
+            panContainer.style.transform = `translate(${panX}px, ${panY}px)`; 
+        }
+        function endPan() { 
+            if (isPanning) { 
+                isPanning = false; 
+                iframeWrapper.style.cursor = 'auto'; 
+                if (!isSafePanMode) { deviceFrame.style.pointerEvents = 'auto'; } 
+            } 
+        }
 
         iframeWrapper.addEventListener('mousedown', (e) => {
-            if (e.button === 1 || (e.button === 0 && e.altKey)) {
+            if (e.button === 1 || (e.button === 0 && e.altKey) || isSafePanMode) {
                 e.preventDefault(); startPan(e.screenX, e.screenY);
             }
         });
