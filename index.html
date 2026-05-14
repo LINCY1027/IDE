@@ -36,7 +36,7 @@
         ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 6px; border: 3px solid var(--scrollbar-bg); }
         ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-        /* 💡 嚴格鎖定全域文字反白選取 */
+        /* 鎖定全域文字反白選取 */
         body, body * { 
             user-select: none; 
             -webkit-user-select: none; 
@@ -49,13 +49,12 @@
             transition: background-color 0.3s; 
         }
 
-        /* 💡 解除需要輸入、編輯、複製區域的反白鎖定 */
+        /* 解除需要輸入、編輯、複製區域的反白鎖定 */
         input, textarea, .CodeMirror *, .console-logs *, .search-result-context * {
             user-select: text;
             -webkit-user-select: text;
         }
         
-        /* Dashboard 樣式 */
         #dashboard-view { display: flex; flex-direction: column; height: 100vh; overflow-y: auto; padding: 40px; box-sizing: border-box; }
         .dashboard-header-title { font-weight: 800; font-size: 32px; letter-spacing: 1px; margin-bottom: 8px; background: linear-gradient(45deg, #007AFF, #A020F0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .dashboard-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; letter-spacing: 1px; }
@@ -75,7 +74,6 @@
         .project-meta { font-size: 12px; color: var(--text-muted); }
         .cloud-sync-status { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
 
-        /* IDE 樣式 */
         #ide-view { display: flex; flex-direction: column; height: 100vh; overflow: hidden; width: 100%; }
         header { background-color: var(--bg-header); backdrop-filter: blur(10px); padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); z-index: 10; flex-shrink: 0; }
         .header-title { font-weight: 800; font-size: 18px; letter-spacing: 0.5px; background: linear-gradient(45deg, #007AFF, #A020F0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: baseline; gap: 12px; }
@@ -99,7 +97,7 @@
         .file-item:active { cursor: grabbing; }
         .file-item:hover { background-color: var(--sidebar-hover); }
         .file-item.active { background-color: var(--sidebar-active); color: var(--sidebar-active-text); }
-        .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
         .file-actions { display: none; gap: 4px; }
         .file-item:hover .file-actions { display: flex; }
         .file-action-btn { font-size: 11px; padding: 2px 6px; cursor: pointer; color: var(--text-muted); border-radius: 4px; background: transparent; border: none; }
@@ -160,11 +158,10 @@
         .log-error { color: #FF453A; font-weight: normal; }
         .log-info { color: #0A84FF; font-weight: normal; }
 
-        /* 全域左下角設定浮動按鈕 */
         .floating-settings-btn { position: fixed; bottom: 24px; left: 24px; background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 24px; padding: 0 20px; height: 48px; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1); cursor: pointer; z-index: 90; transition: 0.2s; font-size: 14px; font-weight: 600; }
         .floating-settings-btn:hover { background-color: var(--btn-bg); transform: scale(1.02); }
 
-        /* Modals (現在放置於最外層) */
+        /* Modals */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--modal-overlay); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
         .modal-overlay.show { opacity: 1; pointer-events: auto; }
         .modal-content { background-color: var(--bg-card); width: 440px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: 1px solid var(--border-color); display: flex; flex-direction: column; overflow: hidden; transform: translateY(20px); transition: transform 0.2s; }
@@ -173,8 +170,11 @@
         .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; max-height: 75vh; overflow-y: auto;}
         .setting-group { display: flex; flex-direction: column; gap: 8px; }
         .setting-group label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
-        .setting-input { padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--cm-bg); color: var(--text-main); font-size: 14px; outline: none; }
+        
+        /* 解鎖的輸入框樣式 */
+        .setting-input { padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--cm-bg); color: var(--text-main); font-size: 14px; outline: none; transition: 0.2s; }
         .setting-input:focus { border-color: #007AFF; }
+        
         select.setting-input { cursor: pointer; appearance: auto; }
         .res-container { display: flex; gap: 10px; align-items: center; }
         .res-container span { color: var(--text-muted); }
@@ -199,7 +199,7 @@
 </head>
 <body>
 
-    <!-- 全域浮動設定按鈕 -->
+    <!-- 全域左下角設定浮動按鈕 -->
     <button class="floating-settings-btn" onclick="openModal('settings-modal')">設定</button>
 
     <!-- 視圖一：首頁 -->
@@ -207,7 +207,7 @@
         <div class="dashboard-header-title">CYIDE <span class="dashboard-subtitle">CYIDE DESIGN BY CYLIN</span></div>
         <div class="dashboard-subtitle">Cloud Workspace Management</div>
         
-        <!-- 💡 精簡後的專案管理控制列 -->
+        <!-- 精簡大廳按鈕 -->
         <div class="dashboard-controls">
             <button class="dashboard-btn" onclick="createNewProjectDashboard()">建立新專案</button>
         </div>
@@ -316,9 +316,11 @@
                 <button class="close-btn" onclick="closeModal('settings-modal')">X</button>
             </div>
             <div class="modal-body">
+                
+                <!-- 💡 解鎖專案名稱修改 (觸發 onchange 自動儲存) -->
                 <div class="setting-group">
                     <label>專案名稱</label>
-                    <input type="text" id="project-name-input" class="setting-input" value="index" disabled title="專案名稱建立後不可更改">
+                    <input type="text" id="project-name-input" class="setting-input" value="index" onchange="updateProjectName()">
                 </div>
                 <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
                 
@@ -486,7 +488,10 @@
         // ==========================================
         const dashboardView = document.getElementById('dashboard-view');
         const ideView = document.getElementById('ide-view');
-        let currentProjectName = 'index'; 
+        
+        // 💡 導入獨立的專案內部 ID (Internal ID)
+        let currentProjectId = null;
+        let currentProjectName = '未命名專案'; 
 
         function createEmptyVFS() {
             return {
@@ -498,19 +503,32 @@
 
         let vfs = createEmptyVFS();
 
+        // 💡 修改：存檔時使用 currentProjectId 作為路徑，並將 currentProjectName 存入 metadata
         async function saveCurrentProject() {
-            if (!currentProjectName) return;
+            if (!currentProjectId) return;
             setSyncStatus(db ? 'saving' : 'local');
             const projectData = {};
             for (let file in vfs) { projectData[file] = vfs[file].doc.getValue(); }
             
-            const metadata = { name: currentProjectName, lastModified: new Date().toLocaleString(), files: projectData, timestamp: Date.now() };
+            const metadata = { 
+                name: currentProjectName, 
+                lastModified: new Date().toLocaleString(), 
+                files: projectData, 
+                timestamp: Date.now() 
+            };
 
             if (db) {
-                try { await db.collection("cyide_projects").doc(currentProjectName).set(metadata); setSyncStatus('saved'); } 
-                catch (error) { console.error("Firebase 儲存失敗:", error); setSyncStatus('error'); localStorage.setItem(`cyide_proj_${currentProjectName}`, JSON.stringify(metadata)); }
+                try { 
+                    await db.collection("cyide_projects").doc(currentProjectId).set(metadata); 
+                    setSyncStatus('saved'); 
+                } catch (error) { 
+                    console.error("Firebase 儲存失敗:", error); 
+                    setSyncStatus('error'); 
+                    localStorage.setItem(`cyide_proj_${currentProjectId}`, JSON.stringify(metadata)); 
+                }
             } else {
-                localStorage.setItem(`cyide_proj_${currentProjectName}`, JSON.stringify(metadata)); setSyncStatus('local');
+                localStorage.setItem(`cyide_proj_${currentProjectId}`, JSON.stringify(metadata)); 
+                setSyncStatus('local');
             }
         }
 
@@ -521,7 +539,11 @@
             if (db) {
                 try {
                     const snapshot = await db.collection("cyide_projects").orderBy("timestamp", "desc").get();
-                    snapshot.forEach(doc => { projects.push(doc.data()); });
+                    snapshot.forEach(doc => { 
+                        const data = doc.data();
+                        data.id = doc.id; // 💡 注入文檔 ID
+                        projects.push(data); 
+                    });
                 } catch (error) { projects = loadLocalProjectsFallback(); }
             } else { projects = loadLocalProjectsFallback(); }
             renderProjectGrid(projects, grid);
@@ -531,7 +553,13 @@
             let projects = [];
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (key.startsWith('cyide_proj_')) { try { projects.push(JSON.parse(localStorage.getItem(key))); } catch (e) {} }
+                if (key.startsWith('cyide_proj_')) { 
+                    try { 
+                        let proj = JSON.parse(localStorage.getItem(key));
+                        proj.id = key.replace('cyide_proj_', ''); // 💡 提取 ID
+                        projects.push(proj); 
+                    } catch (e) {} 
+                }
             }
             return projects.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         }
@@ -542,23 +570,26 @@
             projects.forEach(proj => {
                 const card = document.createElement('div'); card.className = 'project-card';
                 card.innerHTML = `
-                    <div class="project-card-header"><div class="project-icon">&lt;/&gt;</div><button class="project-delete" onclick="deleteProjectDashboard('${proj.name}', event)">刪除</button></div>
+                    <div class="project-card-header"><div class="project-icon">&lt;/&gt;</div><button class="project-delete" onclick="deleteProjectDashboard('${proj.id}', '${proj.name}', event)">刪除</button></div>
                     <div class="project-name">${proj.name}</div><div class="project-meta">最後修改: ${proj.lastModified}</div>
                 `;
-                card.onclick = () => openProject(proj.name, proj.files);
+                // 💡 點擊時傳入 ID 與 Name
+                card.onclick = () => openProject(proj.id, proj.name, proj.files);
                 grid.appendChild(card);
             });
         }
 
-        async function deleteProjectDashboard(name, event) {
+        async function deleteProjectDashboard(id, name, event) {
             event.stopPropagation();
             if(confirm(`確定要刪除專案「${name}」嗎？這將無法復原。`)) {
-                if (db) { try { await db.collection("cyide_projects").doc(name).delete(); } catch(e) {} }
-                localStorage.removeItem(`cyide_proj_${name}`); loadDashboardProjects();
+                if (db) { try { await db.collection("cyide_projects").doc(id).delete(); } catch(e) {} }
+                localStorage.removeItem(`cyide_proj_${id}`); 
+                loadDashboardProjects();
             }
         }
 
-        function openProject(name, filesData) {
+        function openProject(id, name, filesData) {
+            currentProjectId = id;
             currentProjectName = name; 
             document.getElementById('project-name-input').value = name;
             vfs = {};
@@ -571,14 +602,19 @@
         }
 
         function createNewProjectDashboard() {
-            const name = prompt("請輸入新專案名稱：", "index");
+            const name = prompt("請輸入新專案名稱：", "未命名專案");
             if (!name || name.trim() === '') return;
-            if (localStorage.getItem(`cyide_proj_${name.trim()}`)) { alert("此專案名稱已存在！"); return; }
             
+            // 💡 產生獨立的識別碼 (時間戳記 + 隨機字串)
+            currentProjectId = 'proj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
             currentProjectName = name.trim(); 
+            document.getElementById('project-name-input').value = currentProjectName;
+            
             vfs = createEmptyVFS();
             Object.values(vfs).forEach(fileObj => { fileObj.doc.on('change', () => { clearTimeout(updateTimeout); updateTimeout = setTimeout(() => { updatePreview(); saveCurrentProject(); }, 800); }); });
-            saveCurrentProject(); switchToIDE();
+            
+            saveCurrentProject(); 
+            switchToIDE();
             openPane('index.html');
         }
 
@@ -927,6 +963,15 @@
         // ==========================================
         function openModal(id) { document.getElementById(id).classList.add('show'); }
         function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+        // 💡 新增：解鎖專案名稱編輯儲存功能
+        function updateProjectName() {
+            const newName = document.getElementById('project-name-input').value.trim();
+            if (newName && newName !== currentProjectName) {
+                currentProjectName = newName;
+                saveCurrentProject(); // 會將新名稱寫入 metadata，且不會改變 ID
+            }
+        }
 
         document.getElementById('fb-api-key').value = fbApiKey;
         document.getElementById('fb-auth-domain').value = fbAuthDomain;
