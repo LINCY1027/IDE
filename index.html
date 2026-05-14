@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CYIDE - Professional Workspace</title>
+    <title>CYIDE - Cloud Workspace</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/monokai.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     
     <style>
         :root {
@@ -28,71 +31,113 @@
             --scrollbar-bg: #000000; --scrollbar-thumb: #48484A;
         }
 
-        /* 主題化捲軸 */
         ::-webkit-scrollbar { width: 12px; height: 12px; }
         ::-webkit-scrollbar-track { background: var(--scrollbar-bg); border-radius: 6px; }
         ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 6px; border: 3px solid var(--scrollbar-bg); }
         ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-        body {
-            margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg-body); color: var(--text-main);
-            display: flex; flex-direction: column; height: 100vh; overflow: hidden; transition: background-color 0.3s;
+        /* 💡 嚴格鎖定全域文字反白選取 */
+        body, body * { 
+            user-select: none; 
+            -webkit-user-select: none; 
+        }
+
+        body { 
+            margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background-color: var(--bg-body); color: var(--text-main); 
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden; 
+            transition: background-color 0.3s; 
+        }
+
+        /* 💡 解除需要輸入、編輯、複製區域的反白鎖定 */
+        input, textarea, .CodeMirror *, .console-logs *, .search-result-context * {
+            user-select: text;
+            -webkit-user-select: text;
         }
         
-        header {
-            background-color: var(--bg-header); backdrop-filter: blur(10px); padding: 12px 24px;
-            display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); z-index: 10;
-        }
-        .header-title { 
-            font-weight: 800; font-size: 18px; letter-spacing: 0.5px; 
-            background: linear-gradient(45deg, #007AFF, #A020F0); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            display: flex; align-items: baseline; gap: 12px;
-        }
+        /* Dashboard 樣式 */
+        #dashboard-view { display: flex; flex-direction: column; height: 100vh; overflow-y: auto; padding: 40px; box-sizing: border-box; }
+        .dashboard-header-title { font-weight: 800; font-size: 32px; letter-spacing: 1px; margin-bottom: 8px; background: linear-gradient(45deg, #007AFF, #A020F0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .dashboard-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; letter-spacing: 1px; }
+        
+        .dashboard-controls { display: flex; gap: 16px; margin-bottom: 40px; align-items: center; background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .dashboard-btn { background-color: #007AFF; color: #FFF; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; white-space: nowrap; }
+        .dashboard-btn:hover { background-color: #0056b3; transform: translateY(-2px); }
+
+        .project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
+        .project-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+        .project-card:hover { border-color: #007AFF; transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,122,255,0.1); }
+        .project-card-header { display: flex; justify-content: space-between; align-items: center; }
+        .project-icon { font-weight: bold; color: #007AFF; font-size: 18px; }
+        .project-delete { color: var(--text-muted); background: transparent; border: none; cursor: pointer; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .project-delete:hover { color: #FF3B30; background: rgba(255,59,48,0.1); }
+        .project-name { font-size: 16px; font-weight: 600; color: var(--text-main); word-break: break-all; }
+        .project-meta { font-size: 12px; color: var(--text-muted); }
+        .cloud-sync-status { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+
+        /* IDE 樣式 */
+        #ide-view { display: flex; flex-direction: column; height: 100vh; overflow: hidden; width: 100%; }
+        header { background-color: var(--bg-header); backdrop-filter: blur(10px); padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); z-index: 10; flex-shrink: 0; }
+        .header-title { font-weight: 800; font-size: 18px; letter-spacing: 0.5px; background: linear-gradient(45deg, #007AFF, #A020F0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: baseline; gap: 12px; }
         .header-subtitle { font-size: 11px; font-weight: 500; color: var(--text-muted); -webkit-text-fill-color: var(--text-muted); letter-spacing: 1px; }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .header-actions button { background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: 0.2s; }
+        .header-actions button:hover { background-color: var(--border-color); }
+        .export-btn { background-color: #007AFF !important; color: white !important; border: none !important; font-weight: bold !important; }
+        .export-btn:hover { background-color: #0056b3 !important; }
 
         .main-workspace { display: flex; flex: 1; overflow: hidden; padding: 12px; gap: 4px; }
         .panel { background-color: var(--bg-card); border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color); }
         
         .sidebar { width: 200px; background-color: var(--sidebar-bg); flex-shrink: 0; }
-        .sidebar-header { padding: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
-        .sidebar-actions span { cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: 0.2s; font-size: 11px; }
+        .sidebar-header { padding: 12px; font-size: 11px; font-weight: 600; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
+        .sidebar-actions span { cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: 0.2s; font-size: 11px; font-weight: bold;}
         .sidebar-actions span:hover { background-color: var(--sidebar-hover); color: var(--text-main); }
+        
         .file-list { flex: 1; overflow-y: auto; padding: 8px 0; }
-        .file-item { padding: 6px 16px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 8px; color: var(--text-main); transition: 0.2s; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px 6px 16px; cursor: grab; font-size: 13px; color: var(--text-main); transition: 0.2s; }
+        .file-item:active { cursor: grabbing; }
         .file-item:hover { background-color: var(--sidebar-hover); }
         .file-item.active { background-color: var(--sidebar-active); color: var(--sidebar-active-text); }
+        .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-actions { display: none; gap: 4px; }
+        .file-item:hover .file-actions { display: flex; }
+        .file-action-btn { font-size: 11px; padding: 2px 6px; cursor: pointer; color: var(--text-muted); border-radius: 4px; background: transparent; border: none; }
+        .file-action-btn:hover { background-color: var(--border-color); color: var(--text-main); }
         
-        .editor-side { flex: 1; min-width: 0; }
+        .editor-side { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .multi-editor-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; background: var(--bg-body); }
+        .editor-pane { display: flex; flex-direction: column; overflow: hidden; transition: box-shadow 0.2s; }
+        .editor-pane.focused { box-shadow: inset 0 0 0 1px #007AFF; }
+        .pane-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); font-size: 12px; font-weight: bold; color: var(--text-muted); }
+        .pane-header .close-pane { cursor: pointer; color: var(--text-muted); padding: 2px 6px; border-radius: 4px; transition: 0.2s; }
+        .pane-header .close-pane:hover { background: rgba(255, 59, 48, 0.1); color: #FF3B30; }
+        .pane-cm-wrapper { flex: 1; overflow: hidden; position: relative; }
+        .pane-cm-wrapper .CodeMirror { height: 100%; position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+        
+        .v-resizer { height: 8px; cursor: row-resize; background-color: var(--bg-body); flex-shrink: 0; z-index: 20; display: flex; justify-content: center; align-items: center; transition: 0.2s; }
+        .v-resizer:hover, .v-resizer.active { background-color: var(--border-color); }
+        .v-resizer::after { content: ''; height: 2px; width: 24px; background-color: var(--text-muted); border-radius: 1px; opacity: 0.5; }
+
         .preview-side { flex: 1; min-width: 0; position: relative; transition: all 0.3s; }
-        
-        /* 全螢幕模式 */
         .preview-side.fullscreen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100; border-radius: 0; border: none; }
         .preview-side.fullscreen .h-resizer, .preview-side.fullscreen .console-panel { display: none !important; }
         
         .resizer { width: 12px; cursor: col-resize; display: flex; justify-content: center; align-items: center; transition: background-color 0.2s; border-radius: 6px; z-index: 20; flex-shrink: 0; }
         .resizer:hover, .resizer.active { background-color: var(--border-color); }
         .resizer::after { content: ''; width: 2px; height: 24px; background-color: var(--text-muted); border-radius: 1px; opacity: 0.5; }
-
         .h-resizer { height: 12px; cursor: row-resize; display: flex; justify-content: center; align-items: center; transition: background-color 0.2s; background-color: var(--bg-body); z-index: 20; }
         .h-resizer:hover, .h-resizer.active { background-color: var(--border-color); }
         .h-resizer::after { content: ''; height: 2px; width: 24px; background-color: var(--text-muted); border-radius: 1px; opacity: 0.5; }
 
         .toolbar { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border-color); background-color: var(--bg-card); overflow-x: auto; }
-        .tabs { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-        .tabs::-webkit-scrollbar { display: none; }
-        .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; cursor: pointer; font-weight: 500; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .tab-btn.active { background-color: var(--btn-bg); color: var(--text-main); }
         
-        .editor-tools { display: flex; gap: 6px; flex-shrink: 0; margin-left: 12px; }
-        .icon-btn { background: transparent; border: 1px solid transparent; color: var(--text-muted); padding: 4px 8px; cursor: pointer; border-radius: 4px; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 4px; }
+        .editor-tools { display: flex; gap: 6px; flex-shrink: 0; align-items: center;}
+        .active-file-badge { font-size: 11px; padding: 4px 8px; background: var(--bg-body); border-radius: 4px; color: #007AFF; font-weight: bold; margin-right: 8px;}
+        .icon-btn { background: transparent; border: 1px solid transparent; color: var(--text-muted); padding: 4px 8px; cursor: pointer; border-radius: 4px; font-size: 12px; font-weight: 500; }
         .icon-btn:hover { background-color: var(--btn-bg); color: var(--text-main); border-color: var(--border-color); }
         .icon-btn.active { background-color: var(--bg-body); color: #007AFF; border-color: var(--border-color); }
-        .ai-btn { color: var(--ai-accent); border: 1px solid rgba(160, 32, 240, 0.3); }
-        .ai-btn:hover { background-color: rgba(160, 32, 240, 0.1); color: var(--ai-accent); border-color: var(--ai-accent); }
-        .paste-btn:hover { background-color: rgba(0, 122, 255, 0.1); color: #007AFF; border-color: #007AFF; }
-        .clear-btn:hover { background-color: rgba(255, 59, 48, 0.1); color: #FF3B30; border-color: #FF3B30; }
-
+        
         .device-buttons { background-color: var(--btn-bg); border-radius: 6px; padding: 2px; display: inline-flex; }
         .device-buttons button { background-color: transparent; color: var(--text-main); border: none; padding: 4px 10px; cursor: pointer; border-radius: 4px; font-size: 12px; }
         .device-buttons button.active { background-color: var(--btn-active); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -103,37 +148,23 @@
 
         .text-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 4px;}
         .text-btn:hover { color: var(--text-main); }
-
-        .CodeMirror { flex: 1; font-family: 'SF Mono', Consolas, monospace; font-size: 14px; background-color: var(--cm-bg); color: var(--text-main); }
-        .CodeMirror-gutters { background-color: var(--cm-gutter); border-right: 1px solid var(--border-color); }
         
         .iframe-wrapper { flex: 1; position: relative; background-color: var(--bg-body); overflow: auto; }
         .pan-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform-origin: center; overflow: visible; }
-        .device-frame { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(1);
-            background-color: white; border: 1px solid var(--border-color); 
-            border-radius: 6px; overflow: hidden; transition: border-radius 0.3s ease;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.05); transform-origin: center center;
-        }
+        .device-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(1); background-color: white; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; transition: border-radius 0.3s ease; box-shadow: 0 10px 30px rgba(0,0,0,0.05); transform-origin: center center; }
         #preview-output { width: 100%; height: 100%; border: none; display: block; }
         
-        .console-panel { height: 120px; min-height: 40px; background-color: var(--console-bg); display: flex; flex-direction: column; color: var(--console-text); font-family: 'SF Mono', Consolas, monospace; font-size: 12px; z-index: 10; }
+        .console-panel { height: 120px; min-height: 40px; background-color: var(--console-bg); display: flex; flex-direction: column; color: var(--console-text); font-family: 'SF Mono', Consolas, monospace; font-size: 12px; z-index: 10; flex-shrink: 0; }
         .console-header { padding: 6px 12px; background-color: rgba(0,0,0,0.2); color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .console-logs { flex: 1; padding: 10px 12px; overflow-y: auto; line-height: 1.6; }
         .log-error { color: #FF453A; font-weight: normal; }
         .log-info { color: #0A84FF; font-weight: normal; }
 
-        /* Floating Settings Button (移至左下角) */
-        .floating-settings-btn {
-            position: fixed; bottom: 24px; left: 24px;
-            background-color: var(--bg-card); color: var(--text-main);
-            border: 1px solid var(--border-color); border-radius: 24px;
-            padding: 0 20px; height: 48px; display: flex; justify-content: center; align-items: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1); cursor: pointer; z-index: 90; transition: 0.2s; font-size: 14px; font-weight: 600;
-        }
+        /* 全域左下角設定浮動按鈕 */
+        .floating-settings-btn { position: fixed; bottom: 24px; left: 24px; background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 24px; padding: 0 20px; height: 48px; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1); cursor: pointer; z-index: 90; transition: 0.2s; font-size: 14px; font-weight: 600; }
         .floating-settings-btn:hover { background-color: var(--btn-bg); transform: scale(1.02); }
 
-        /* Modals */
+        /* Modals (現在放置於最外層) */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--modal-overlay); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
         .modal-overlay.show { opacity: 1; pointer-events: auto; }
         .modal-content { background-color: var(--bg-card); width: 440px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: 1px solid var(--border-color); display: flex; flex-direction: column; overflow: hidden; transform: translateY(20px); transition: transform 0.2s; }
@@ -147,7 +178,6 @@
         select.setting-input { cursor: pointer; appearance: auto; }
         .res-container { display: flex; gap: 10px; align-items: center; }
         .res-container span { color: var(--text-muted); }
-        
         .ai-textarea { resize: none; height: 100px; font-family: inherit; line-height: 1.5; }
         .setting-row { display: flex; justify-content: space-between; align-items: center; }
         .action-btn { background-color: #007AFF; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; text-align: center; transition: 0.2s; }
@@ -157,6 +187,9 @@
         .close-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; font-weight: bold; line-height: 1; padding: 4px 8px; border-radius: 4px; }
         .close-btn:hover { background-color: var(--sidebar-hover); color: var(--text-main); }
 
+        .drop-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0, 122, 255, 0.1); border: 2px dashed #007AFF; z-index: 50; display: none; justify-content: center; align-items: center; font-weight: bold; color: #007AFF; pointer-events: none; }
+        .drag-active .drop-overlay { display: flex; }
+        
         .search-result-item { padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 13px; cursor: pointer; transition: 0.2s; }
         .search-result-item:hover { background-color: var(--sidebar-hover); }
         .search-result-file { font-weight: 600; color: #007AFF; margin-bottom: 4px; }
@@ -166,14 +199,116 @@
 </head>
 <body>
 
-    <header>
-        <div class="header-title">CYIDE <span class="header-subtitle">CYIDE DESIGN BY CYLIN</span></div>
-    </header>
-
-    <!-- 浮動設定按鈕 -->
+    <!-- 全域浮動設定按鈕 -->
     <button class="floating-settings-btn" onclick="openModal('settings-modal')">設定</button>
 
-    <!-- Settings Modal -->
+    <!-- 視圖一：首頁 -->
+    <div id="dashboard-view">
+        <div class="dashboard-header-title">CYIDE <span class="dashboard-subtitle">CYIDE DESIGN BY CYLIN</span></div>
+        <div class="dashboard-subtitle">Cloud Workspace Management</div>
+        
+        <!-- 💡 精簡後的專案管理控制列 -->
+        <div class="dashboard-controls">
+            <button class="dashboard-btn" onclick="createNewProjectDashboard()">建立新專案</button>
+        </div>
+
+        <div class="project-grid" id="project-grid">
+            <div style="color:var(--text-muted);">正在連接並載入專案...</div>
+        </div>
+    </div>
+
+    <!-- 視圖二：工作區 -->
+    <div id="ide-view" style="display: none;">
+        <header>
+            <div class="header-title">CYIDE <span class="header-subtitle">CYIDE DESIGN BY CYLIN</span></div>
+            <div class="header-actions">
+                <div class="cloud-sync-status" id="cloud-sync-status">狀態檢測中...</div>
+                <button class="export-btn" onclick="openModal('export-modal')">匯出專案</button>
+                <button onclick="returnToDashboard()">回專案管理</button>
+            </div>
+        </header>
+
+        <div class="main-workspace">
+            <div class="panel sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <span>檔案總管</span>
+                    <div class="sidebar-actions">
+                        <span onclick="createNewFile()">新增</span>
+                        <span onclick="openSearchModal()">搜尋</span>
+                    </div>
+                </div>
+                
+                <div class="file-list" id="file-list"></div>
+                
+                <div style="padding: 12px; padding-bottom: 80px; font-size: 11px; color: var(--text-muted); text-align: center;">
+                    拖曳檔案至右側開啟
+                </div>
+            </div>
+
+            <div class="resizer" id="resizer-left"></div>
+
+            <div class="panel editor-side" id="editor-side">
+                <div class="toolbar">
+                    <div class="editor-tools">
+                        <span class="active-file-badge" id="active-file-badge">未選擇檔案</span>
+                        <button class="icon-btn ai-btn" onclick="openAiModal()">AI 生成</button>
+                        <button class="icon-btn paste-btn" onclick="clearAndPaste()" title="快捷鍵 Ctrl+Shift+V">覆蓋貼上</button>
+                        <button class="icon-btn clear-btn" onclick="clearActiveEditor()">清空</button>
+                        <button class="icon-btn" onclick="undoActiveEditor()">復原</button>
+                    </div>
+                </div>
+                <div class="multi-editor-container" id="multi-editor-container">
+                    <div class="drop-overlay">放開以開啟檔案</div>
+                </div>
+            </div>
+
+            <div class="resizer" id="resizer-right"></div>
+
+            <div class="panel preview-side" id="preview-panel">
+                <div class="toolbar">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="device-buttons" id="device-buttons">
+                            <button class="active" onclick="setDevice('desktop')">電腦</button>
+                            <button onclick="setDevice('tablet')">平板</button>
+                            <button onclick="setDevice('mobile')">手機</button>
+                        </div>
+                        <button class="icon-btn" id="pan-mode-btn" onclick="togglePanMode()">移動模式</button>
+                        
+                        <div class="zoom-controls">
+                            <span style="font-size: 12px; color: var(--text-muted);">縮放</span>
+                            <input type="range" id="zoom-slider" class="zoom-slider" min="0.1" max="2.5" step="0.05" value="1">
+                            <span id="zoom-label" class="zoom-label">100%</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="text-btn" onclick="updatePreview()">重新整理</button>
+                        <button class="text-btn" onclick="toggleFullscreen()">全螢幕</button>
+                    </div>
+                </div>
+                
+                <div class="iframe-wrapper" id="iframe-wrapper">
+                    <div class="pan-container" id="pan-container">
+                        <div class="device-frame" id="device-frame">
+                            <iframe id="preview-output"></iframe>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="h-resizer" id="h-resizer"></div>
+
+                <div class="console-panel" id="console-panel">
+                    <div class="console-header">
+                        <span>終端機 Console</span>
+                        <button class="text-btn" onclick="clearConsole()">清空</button>
+                    </div>
+                    <div class="console-logs" id="console-logs"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 全域模態框區域 (Modals) -->
+    <!-- 設定視窗 -->
     <div class="modal-overlay" id="settings-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -183,15 +318,25 @@
             <div class="modal-body">
                 <div class="setting-group">
                     <label>專案名稱</label>
-                    <input type="text" id="project-name-input" class="setting-input" value="index">
+                    <input type="text" id="project-name-input" class="setting-input" value="index" disabled title="專案名稱建立後不可更改">
+                </div>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
+                
+                <div class="setting-group">
+                    <label style="color: #007AFF; font-weight: bold;">Firebase 雲端資料庫設定</label>
+                    <p style="font-size: 11px; color: var(--text-muted); margin: 0;">填寫金鑰後，點擊下方儲存並重新整理即可啟用雲端同步。</p>
+                    <input type="text" id="fb-api-key" class="setting-input" placeholder="API Key (例如: AIzaSy...)">
+                    <input type="text" id="fb-auth-domain" class="setting-input" placeholder="Auth Domain (例如: myapp.firebaseapp.com)">
+                    <input type="text" id="fb-project-id" class="setting-input" placeholder="Project ID (例如: myapp-12345)">
                 </div>
                 <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
 
                 <div class="setting-row">
                     <label>外觀主題</label>
-                    <button class="header-actions btn-outline" style="padding: 6px 12px; border-radius: 6px; cursor: pointer;" onclick="toggleDarkMode()" id="theme-btn">切換深色模式</button>
+                    <button class="action-btn btn-outline" onclick="toggleDarkMode()" id="theme-btn">切換深色模式</button>
                 </div>
                 <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
+                
                 <div class="setting-group">
                     <label>選擇 AI 模型</label>
                     <select id="gemini-model-select" class="setting-input">
@@ -208,42 +353,44 @@
                 <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
                 <div class="setting-group">
                     <label>電腦解析度 (寬 x 高)</label>
-                    <div class="res-container">
-                        <input type="number" id="desktop-w" class="setting-input res-input" style="flex:1">
-                        <span>x</span>
-                        <input type="number" id="desktop-h" class="setting-input res-input" style="flex:1">
-                    </div>
+                    <div class="res-container"><input type="number" id="desktop-w" class="setting-input res-input" style="flex:1"><span>x</span><input type="number" id="desktop-h" class="setting-input res-input" style="flex:1"></div>
                 </div>
                 <div class="setting-group">
                     <label>平板解析度 (寬 x 高)</label>
-                    <div class="res-container">
-                        <input type="number" id="tablet-w" class="setting-input res-input" style="flex:1">
-                        <span>x</span>
-                        <input type="number" id="tablet-h" class="setting-input res-input" style="flex:1">
-                    </div>
+                    <div class="res-container"><input type="number" id="tablet-w" class="setting-input res-input" style="flex:1"><span>x</span><input type="number" id="tablet-h" class="setting-input res-input" style="flex:1"></div>
                 </div>
                 <div class="setting-group">
                     <label>手機解析度 (寬 x 高)</label>
-                    <div class="res-container">
-                        <input type="number" id="mobile-w" class="setting-input res-input" style="flex:1">
-                        <span>x</span>
-                        <input type="number" id="mobile-h" class="setting-input res-input" style="flex:1">
-                    </div>
+                    <div class="res-container"><input type="number" id="mobile-w" class="setting-input res-input" style="flex:1"><span>x</span><input type="number" id="mobile-h" class="setting-input res-input" style="flex:1"></div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="action-btn" style="flex: 1; background-color: #34C759;" onclick="saveSettingsAndReload()">儲存設定並重新整理</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 匯出專案專屬視窗 -->
+    <div class="modal-overlay" id="export-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>匯出專案</span>
+                <button class="close-btn" onclick="closeModal('export-modal')">X</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>1. 匯出集成資料夾 (包含所有專案檔案)</label>
+                    <button class="action-btn" style="width: 100%;" onclick="exportToFolder()">匯出整個資料夾</button>
                 </div>
                 <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%;">
-                
                 <div class="setting-group">
-                    <label>匯出專案檔案</label>
+                    <label>2. 獨立檔案匯出 (單獨下載特定副檔名)</label>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('html')">匯出 HTML</button>
                         <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('css')">匯出 CSS</button>
                         <button class="action-btn btn-outline" style="flex: 1;" onclick="exportSingleFile('js')">匯出 JS</button>
                     </div>
-                    <button class="action-btn btn-outline" style="width: 100%; margin-top: 4px;" onclick="exportToFolder()">匯出整個資料夾</button>
-                </div>
-                
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button class="action-btn" style="flex: 1; background-color: #34C759;" onclick="closeModal('settings-modal')">完成設定</button>
                 </div>
             </div>
         </div>
@@ -287,142 +434,168 @@
         </div>
     </div>
 
-    <div class="main-workspace">
-        
-        <div class="panel sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <span>檔案總管</span>
-                <div class="sidebar-actions">
-                    <span title="新增檔案" onclick="createNewFile()">新增</span>
-                    <span title="全域搜尋" onclick="openSearchModal()">搜尋</span>
-                </div>
-            </div>
-            <div class="file-list" id="file-list"></div>
-        </div>
-
-        <div class="resizer" id="resizer-left"></div>
-
-        <div class="panel editor-side" id="editor-side">
-            <div class="toolbar">
-                <div class="tabs" id="tabs"></div>
-                <div class="editor-tools">
-                    <button class="icon-btn ai-btn" onclick="openAiModal()">AI 生成</button>
-                    <button class="icon-btn paste-btn" onclick="clearAndPaste()" title="一鍵清除並貼上剪貼簿 (Ctrl+Shift+V)">覆蓋貼上</button>
-                    <button class="icon-btn clear-btn" onclick="clearEditor()" title="一鍵清空當前檔案">清空</button>
-                    <button class="icon-btn" onclick="editor.undo()">復原</button>
-                </div>
-            </div>
-            <textarea id="code-editor"></textarea>
-        </div>
-
-        <div class="resizer" id="resizer-right"></div>
-
-        <div class="panel preview-side" id="preview-panel">
-            <div class="toolbar">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="device-buttons" id="device-buttons">
-                        <button class="active" onclick="setDevice('desktop')">電腦</button>
-                        <button onclick="setDevice('tablet')">平板</button>
-                        <button onclick="setDevice('mobile')">手機</button>
-                    </div>
-                    <button class="icon-btn" id="pan-mode-btn" onclick="togglePanMode()" title="移動模式 (開啟後避免點擊模擬畫面)">移動模式</button>
-                    
-                    <div class="zoom-controls">
-                        <span style="font-size: 12px; color: var(--text-muted);">縮放</span>
-                        <input type="range" id="zoom-slider" class="zoom-slider" min="0.1" max="2.5" step="0.05" value="1">
-                        <span id="zoom-label" class="zoom-label">100%</span>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 4px;">
-                    <button class="text-btn" onclick="updatePreview()" title="重新整理">重新整理</button>
-                    <button class="text-btn" onclick="toggleFullscreen()" title="全螢幕模式 (ESC退出)">全螢幕</button>
-                </div>
-            </div>
-            
-            <div class="iframe-wrapper" id="iframe-wrapper">
-                <div class="pan-container" id="pan-container">
-                    <div class="device-frame" id="device-frame">
-                        <iframe id="preview-output"></iframe>
-                    </div>
-                </div>
-            </div>
-
-            <div class="h-resizer" id="h-resizer"></div>
-
-            <div class="console-panel" id="console-panel">
-                <div class="console-header">
-                    <span>終端機 Console</span>
-                    <button class="text-btn" onclick="clearConsole()">清空</button>
-                </div>
-                <div class="console-logs" id="console-logs"></div>
-            </div>
-        </div>
-    </div>
-
+    <!-- CodeMirror 核心函式庫 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/css/css.min.js"></script>
 
     <script>
+        // ==========================================
+        // 1. 讀取與初始化 Firebase (動態金鑰)
+        // ==========================================
+        const fbApiKey = localStorage.getItem('fbApiKey') || '';
+        const fbAuthDomain = localStorage.getItem('fbAuthDomain') || '';
+        const fbProjectId = localStorage.getItem('fbProjectId') || '';
+        
+        let db = null;
+        if (fbApiKey && fbAuthDomain && fbProjectId) {
+            const firebaseConfig = { apiKey: fbApiKey, authDomain: fbAuthDomain, projectId: fbProjectId };
+            try {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                console.log("Firebase 雲端模式已啟動");
+            } catch(e) { console.error("Firebase 初始化失敗", e); }
+        } else {
+            console.warn("Firebase 尚未設定！目前使用 LocalStorage 進行單機儲存。");
+        }
+
+        // ==========================================
+        // 系統工具與狀態
+        // ==========================================
         function logToConsole(message, isError = false, isInfo = false) {
             const consoleLogs = document.getElementById('console-logs');
             const logElement = document.createElement('div');
-            if (isError) {
-                logElement.className = 'log-error';
-                logElement.textContent = '[Error] ' + message;
-            } else if (isInfo) {
-                logElement.className = 'log-info';
-                logElement.textContent = '> ' + message;
-            } else {
-                logElement.textContent = '> ' + message;
-            }
+            if (isError) { logElement.className = 'log-error'; logElement.textContent = '[Error] ' + message; } 
+            else if (isInfo) { logElement.className = 'log-info'; logElement.textContent = '> ' + message; } 
+            else { logElement.textContent = '> ' + message; }
             consoleLogs.appendChild(logElement);
             consoleLogs.scrollTop = consoleLogs.scrollHeight;
         }
 
-        // ==========================================
-        // 一鍵清空 / 覆蓋貼上功能
-        // ==========================================
-        function clearEditor() { 
-            editor.setValue(''); 
-            editor.focus();
-            logToConsole('編輯器內容已清空。', false, true);
-        }
-
-        async function clearAndPaste() {
-            try {
-                const text = await navigator.clipboard.readText();
-                editor.setValue(text);
-                logToConsole('成功讀取剪貼簿並覆蓋程式碼。', false, true);
-            } catch (err) {
-                editor.setValue('');
-                editor.focus();
-                logToConsole('無法自動讀取剪貼簿，已為您清空畫面。請直接按 Ctrl+V (或 Cmd+V) 手動貼上。', false, true);
-            }
+        function setSyncStatus(status) {
+            const statusEl = document.getElementById('cloud-sync-status');
+            if (status === 'saving') { statusEl.textContent = '儲存中...'; } 
+            else if (status === 'saved') { statusEl.textContent = '已儲存雲端'; statusEl.style.color = '#34C759'; } 
+            else if (status === 'local') { statusEl.textContent = '單機儲存中'; statusEl.style.color = 'var(--text-muted)'; } 
+            else if (status === 'error') { statusEl.textContent = '儲存失敗'; statusEl.style.color = '#FF3B30'; }
         }
 
         // ==========================================
-        // 核心系統初始化
+        // 專案管理與虛擬檔案系統 (VFS)
         // ==========================================
-        const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
-            lineNumbers: true, 
-            lineWrapping: true, 
-            theme: 'default', 
-            undoDepth: 200,
-            extraKeys: {
-                "Shift-Ctrl-V": clearAndPaste,
-                "Shift-Cmd-V": clearAndPaste
+        const dashboardView = document.getElementById('dashboard-view');
+        const ideView = document.getElementById('ide-view');
+        let currentProjectName = 'index'; 
+
+        function createEmptyVFS() {
+            return {
+                'index.html': { doc: CodeMirror.Doc(`<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>CYIDE</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="welcome">\n    <h1>CYIDE Project</h1>\n    <p>拖曳左方檔案至此區域開始編輯</p>\n  </div>\n  <script src="app.js"><\/script>\n</body>\n</html>`, 'xml') },
+                'style.css': { doc: CodeMirror.Doc(`body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f9f9f9; }\n.welcome { text-align: center; padding: 40px; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); line-height: 1.6; }`, 'css') },
+                'app.js': { doc: CodeMirror.Doc(`console.log("System Ready.");`, 'javascript') }
+            };
+        }
+
+        let vfs = createEmptyVFS();
+
+        async function saveCurrentProject() {
+            if (!currentProjectName) return;
+            setSyncStatus(db ? 'saving' : 'local');
+            const projectData = {};
+            for (let file in vfs) { projectData[file] = vfs[file].doc.getValue(); }
+            
+            const metadata = { name: currentProjectName, lastModified: new Date().toLocaleString(), files: projectData, timestamp: Date.now() };
+
+            if (db) {
+                try { await db.collection("cyide_projects").doc(currentProjectName).set(metadata); setSyncStatus('saved'); } 
+                catch (error) { console.error("Firebase 儲存失敗:", error); setSyncStatus('error'); localStorage.setItem(`cyide_proj_${currentProjectName}`, JSON.stringify(metadata)); }
+            } else {
+                localStorage.setItem(`cyide_proj_${currentProjectName}`, JSON.stringify(metadata)); setSyncStatus('local');
             }
-        });
+        }
 
-        const vfs = {
-            'index.html': { doc: CodeMirror.Doc(`<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>CYIDE</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <div class="welcome">\n    <h1>CYIDE Initialized</h1>\n    <p>Professional workspace is ready.</p>\n  </div>\n  <script src="app.js"><\/script>\n</body>\n</html>`, 'xml') },
-            'style.css': { doc: CodeMirror.Doc(`body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f9f9f9; }\n.welcome { text-align: center; padding: 40px; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); line-height: 1.6; }`, 'css') },
-            'app.js': { doc: CodeMirror.Doc(`console.log("System Ready.");`, 'javascript') }
-        };
+        async function loadDashboardProjects() {
+            const grid = document.getElementById('project-grid');
+            grid.innerHTML = '<div style="color:var(--text-muted);">載入中...</div>';
+            let projects = [];
+            if (db) {
+                try {
+                    const snapshot = await db.collection("cyide_projects").orderBy("timestamp", "desc").get();
+                    snapshot.forEach(doc => { projects.push(doc.data()); });
+                } catch (error) { projects = loadLocalProjectsFallback(); }
+            } else { projects = loadLocalProjectsFallback(); }
+            renderProjectGrid(projects, grid);
+        }
 
-        let currentFile = 'index.html';
+        function loadLocalProjectsFallback() {
+            let projects = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('cyide_proj_')) { try { projects.push(JSON.parse(localStorage.getItem(key))); } catch (e) {} }
+            }
+            return projects.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        }
+
+        function renderProjectGrid(projects, grid) {
+            grid.innerHTML = '';
+            if (projects.length === 0) { grid.innerHTML = '<div style="color:var(--text-muted);">目前沒有儲存的專案。點擊「建立新專案」開始。</div>'; return; }
+            projects.forEach(proj => {
+                const card = document.createElement('div'); card.className = 'project-card';
+                card.innerHTML = `
+                    <div class="project-card-header"><div class="project-icon">&lt;/&gt;</div><button class="project-delete" onclick="deleteProjectDashboard('${proj.name}', event)">刪除</button></div>
+                    <div class="project-name">${proj.name}</div><div class="project-meta">最後修改: ${proj.lastModified}</div>
+                `;
+                card.onclick = () => openProject(proj.name, proj.files);
+                grid.appendChild(card);
+            });
+        }
+
+        async function deleteProjectDashboard(name, event) {
+            event.stopPropagation();
+            if(confirm(`確定要刪除專案「${name}」嗎？這將無法復原。`)) {
+                if (db) { try { await db.collection("cyide_projects").doc(name).delete(); } catch(e) {} }
+                localStorage.removeItem(`cyide_proj_${name}`); loadDashboardProjects();
+            }
+        }
+
+        function openProject(name, filesData) {
+            currentProjectName = name; 
+            document.getElementById('project-name-input').value = name;
+            vfs = {};
+            for (let file in filesData) {
+                vfs[file] = { doc: CodeMirror.Doc(filesData[file], getCodeMirrorMode(file)) };
+                vfs[file].doc.on('change', () => { clearTimeout(updateTimeout); updateTimeout = setTimeout(() => { updatePreview(); saveCurrentProject(); }, 800); });
+            }
+            switchToIDE();
+            if (vfs['index.html']) openPane('index.html');
+        }
+
+        function createNewProjectDashboard() {
+            const name = prompt("請輸入新專案名稱：", "index");
+            if (!name || name.trim() === '') return;
+            if (localStorage.getItem(`cyide_proj_${name.trim()}`)) { alert("此專案名稱已存在！"); return; }
+            
+            currentProjectName = name.trim(); 
+            vfs = createEmptyVFS();
+            Object.values(vfs).forEach(fileObj => { fileObj.doc.on('change', () => { clearTimeout(updateTimeout); updateTimeout = setTimeout(() => { updatePreview(); saveCurrentProject(); }, 800); }); });
+            saveCurrentProject(); switchToIDE();
+            openPane('index.html');
+        }
+
+        function switchToIDE() {
+            dashboardView.style.display = 'none'; ideView.style.display = 'flex';
+            renderFileTree(); 
+            setTimeout(() => { applyDeviceScale(); updatePreview(); }, 100);
+        }
+
+        function returnToDashboard() {
+            saveCurrentProject();
+            document.getElementById('multi-editor-container').innerHTML = '<div class="drop-overlay">放開以開啟檔案</div>';
+            openPanes = []; activeFocusedFile = null; updateActiveFileBadge();
+            
+            ideView.style.display = 'none'; dashboardView.style.display = 'flex';
+            loadDashboardProjects();
+        }
 
         function getCodeMirrorMode(filename) {
             if (filename.endsWith('.html')) return 'xml';
@@ -431,54 +604,230 @@
             return 'default';
         }
 
+        // ==========================================
+        // 檔案總管邏輯 (支援新增、改名、刪除)
+        // ==========================================
         function renderFileTree() {
-            const fileList = document.getElementById('file-list');
-            fileList.innerHTML = '';
+            const fileList = document.getElementById('file-list'); fileList.innerHTML = '';
             Object.keys(vfs).sort().forEach(filename => {
-                const div = document.createElement('div');
-                div.className = `file-item ${filename === currentFile ? 'active' : ''}`;
-                div.innerHTML = filename;
-                div.onclick = () => switchFile(filename);
+                const div = document.createElement('div'); div.className = `file-item`; 
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.className = "file-name";
+                nameSpan.textContent = filename;
+                
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = "file-actions";
+                
+                const renameBtn = document.createElement('button');
+                renameBtn.className = "file-action-btn";
+                renameBtn.textContent = "改名";
+                renameBtn.onclick = (e) => renameFile(e, filename);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = "file-action-btn";
+                deleteBtn.textContent = "刪除";
+                deleteBtn.onclick = (e) => deleteFile(e, filename);
+
+                actionsDiv.appendChild(renameBtn);
+                actionsDiv.appendChild(deleteBtn);
+
+                div.appendChild(nameSpan);
+                div.appendChild(actionsDiv);
+
+                div.draggable = true;
+                div.ondragstart = (e) => { e.dataTransfer.setData('text/plain', filename); };
+                div.onclick = () => openPane(filename);
+                
                 fileList.appendChild(div);
             });
-            renderTabs();
-        }
-
-        function renderTabs() {
-            const tabsContainer = document.getElementById('tabs');
-            tabsContainer.innerHTML = '';
-            Object.keys(vfs).sort().forEach(filename => {
-                const btn = document.createElement('button');
-                btn.className = `tab-btn ${filename === currentFile ? 'active' : ''}`;
-                btn.innerHTML = filename;
-                btn.onclick = () => switchFile(filename);
-                tabsContainer.appendChild(btn);
-            });
-        }
-
-        function switchFile(filename) {
-            if (!vfs[filename]) return;
-            currentFile = filename;
-            editor.swapDoc(vfs[filename].doc);
-            document.getElementById('ai-target-label').textContent = `目標檔案: ${filename}`;
-            renderFileTree();
         }
 
         function createNewFile() {
-            const filename = prompt("請輸入新檔案名稱 (例如: script.js, about.html):");
+            const filename = prompt("請輸入新檔案名稱 (例如: script.js):");
             if (!filename || filename.trim() === '') return;
-            const name = filename.trim();
-            if (vfs[name]) { alert("此檔案已經存在！"); return; }
+            const name = filename.trim(); if (vfs[name]) { alert("此檔案名稱已經存在！"); return; }
             
             vfs[name] = { doc: CodeMirror.Doc('', getCodeMirrorMode(name)) };
-            vfs[name].doc.on('change', () => { clearTimeout(updateTimeout); updateTimeout = setTimeout(updatePreview, 800); });
-
-            switchFile(name); updatePreview();
+            vfs[name].doc.on('change', () => { clearTimeout(updateTimeout); updateTimeout = setTimeout(() => { updatePreview(); saveCurrentProject(); }, 800); });
+            
+            renderFileTree(); openPane(name); updatePreview(); saveCurrentProject();
         }
 
-        Object.values(vfs).forEach(fileObj => {
-            fileObj.doc.on('change', () => { clearTimeout(updateTimeout); updateTimeout = setTimeout(updatePreview, 800); });
+        function renameFile(e, oldName) {
+            e.stopPropagation();
+            const newName = prompt(`為 ${oldName} 輸入新名稱：`, oldName);
+            if (!newName || newName.trim() === '' || newName === oldName) return;
+            const name = newName.trim();
+            if (vfs[name]) { alert("此檔案名稱已經存在！"); return; }
+            
+            const oldContent = vfs[oldName].doc.getValue();
+            vfs[name] = { doc: CodeMirror.Doc(oldContent, getCodeMirrorMode(name)) };
+            vfs[name].doc.on('change', () => { clearTimeout(updateTimeout); updateTimeout = setTimeout(() => { updatePreview(); saveCurrentProject(); }, 800); });
+            
+            const pane = openPanes.find(p => p.filename === oldName);
+            if (pane) {
+                pane.filename = name;
+                pane.cm.swapDoc(vfs[name].doc);
+                pane.cm.setOption('theme', isDarkMode ? 'monokai' : 'default');
+                pane.container.querySelector('.pane-header span:first-child').textContent = name;
+                pane.container.querySelector('.close-pane').setAttribute('onclick', `closePane('${name}')`);
+            }
+            
+            if (activeFocusedFile === oldName) setActiveFile(name);
+            delete vfs[oldName];
+            
+            renderFileTree(); updatePreview(); saveCurrentProject();
+        }
+
+        function deleteFile(e, filename) {
+            e.stopPropagation();
+            if (Object.keys(vfs).length <= 1) { alert("專案內至少需要保留一個檔案！"); return; }
+            if (confirm(`確定要永久刪除「${filename}」嗎？`)) {
+                delete vfs[filename];
+                closePane(filename);
+                renderFileTree(); updatePreview(); saveCurrentProject();
+            }
+        }
+
+        // ==========================================
+        // 多視窗分割引擎 (Drag & Drop)
+        // ==========================================
+        let openPanes = [];
+        let activeFocusedFile = null;
+        const editorContainer = document.getElementById('multi-editor-container');
+
+        editorContainer.addEventListener('dragover', e => { e.preventDefault(); editorContainer.classList.add('drag-active'); });
+        editorContainer.addEventListener('dragleave', e => { editorContainer.classList.remove('drag-active'); });
+        editorContainer.addEventListener('drop', e => {
+            e.preventDefault(); editorContainer.classList.remove('drag-active');
+            const filename = e.dataTransfer.getData('text/plain');
+            if (filename && vfs[filename]) openPane(filename);
         });
+
+        function updateActiveFileBadge() {
+            const badge = document.getElementById('active-file-badge');
+            badge.textContent = activeFocusedFile ? `作用中: ${activeFocusedFile}` : '未選擇檔案';
+            document.querySelectorAll('.editor-pane').forEach(p => p.classList.remove('focused'));
+            if(activeFocusedFile) {
+                const paneObj = openPanes.find(p => p.filename === activeFocusedFile);
+                if(paneObj) paneObj.container.classList.add('focused');
+            }
+        }
+
+        function setActiveFile(filename) {
+            activeFocusedFile = filename; updateActiveFileBadge();
+            document.getElementById('ai-target-label').textContent = `目標檔案: ${filename}`;
+        }
+
+        function openPane(filename) {
+            const existingPane = openPanes.find(p => p.filename === filename);
+            if (existingPane) { existingPane.cm.focus(); return; }
+
+            if (openPanes.length >= 4) { alert('為了保持版面整潔，最多只能同時開啟 4 個檔案視窗喔！'); return; }
+
+            const paneDiv = document.createElement('div'); paneDiv.className = 'editor-pane';
+            paneDiv.style.flex = '1';
+            
+            const headerDiv = document.createElement('div'); headerDiv.className = 'pane-header';
+            headerDiv.innerHTML = `<span>${filename}</span><span class="close-pane" onclick="closePane('${filename}')">X</span>`;
+            
+            const cmWrapper = document.createElement('div'); cmWrapper.className = 'pane-cm-wrapper';
+            
+            paneDiv.appendChild(headerDiv); paneDiv.appendChild(cmWrapper);
+
+            if (openPanes.length > 0) {
+                const resizer = document.createElement('div'); resizer.className = 'v-resizer';
+                bindVerticalResizer(resizer, openPanes[openPanes.length - 1].container, paneDiv);
+                editorContainer.appendChild(resizer);
+            }
+
+            editorContainer.appendChild(paneDiv);
+
+            const cm = CodeMirror(cmWrapper, { lineNumbers: true, lineWrapping: true, theme: isDarkMode ? 'monokai' : 'default', undoDepth: 200, extraKeys: { "Shift-Ctrl-V": clearAndPaste, "Shift-Cmd-V": clearAndPaste } });
+            cm.swapDoc(vfs[filename].doc);
+            cm.on('focus', () => setActiveFile(filename));
+            
+            openPanes.push({ filename, container: paneDiv, cm });
+            redistributeHeights();
+            
+            setTimeout(() => { cm.refresh(); cm.focus(); }, 50);
+        }
+
+        function closePane(filename) {
+            const index = openPanes.findIndex(p => p.filename === filename);
+            if (index > -1) {
+                const paneObj = openPanes[index];
+                editorContainer.removeChild(paneObj.container);
+                
+                let resizerToRemove = null;
+                if (index > 0) resizerToRemove = paneObj.container.previousElementSibling;
+                else if (openPanes.length > 1) resizerToRemove = paneObj.container.nextElementSibling;
+                if (resizerToRemove && resizerToRemove.classList.contains('v-resizer')) editorContainer.removeChild(resizerToRemove);
+
+                openPanes.splice(index, 1);
+                
+                if (activeFocusedFile === filename) {
+                    if (openPanes.length > 0) setActiveFile(openPanes[openPanes.length - 1].filename);
+                    else setActiveFile(null);
+                }
+                
+                redistributeHeights();
+            }
+        }
+
+        function redistributeHeights() {
+            if(openPanes.length === 0) return;
+            const pct = 100 / openPanes.length;
+            openPanes.forEach(p => { p.container.style.height = `${pct}%`; p.container.style.flex = 'none'; setTimeout(()=>p.cm.refresh(), 50); });
+        }
+
+        function bindVerticalResizer(resizer, topPane, bottomPane) {
+            let startY, startTopH, startBottomH, containerH;
+            resizer.addEventListener('mousedown', function(e) {
+                e.preventDefault(); startY = e.clientY;
+                startTopH = topPane.getBoundingClientRect().height; startBottomH = bottomPane.getBoundingClientRect().height;
+                containerH = editorContainer.getBoundingClientRect().height;
+                resizer.classList.add('active'); document.body.style.cursor = 'row-resize';
+                
+                const onMouseMove = (e) => {
+                    let deltaY = e.clientY - startY; let newTopH = startTopH + deltaY; let newBottomH = startBottomH - deltaY;
+                    if (newTopH > 40 && newBottomH > 40) {
+                        topPane.style.height = `${(newTopH / containerH) * 100}%`; bottomPane.style.height = `${(newBottomH / containerH) * 100}%`;
+                        openPanes.forEach(p=>p.cm.refresh());
+                    }
+                };
+                const onMouseUp = () => { resizer.classList.remove('active'); document.body.style.cursor = 'default'; document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); };
+                
+                document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
+            });
+        }
+
+        // ==========================================
+        // 全局工具列操作
+        // ==========================================
+        function getActiveDoc() {
+            if (!activeFocusedFile || !vfs[activeFocusedFile]) return null;
+            return vfs[activeFocusedFile].doc;
+        }
+        function getActiveCM() {
+            if (!activeFocusedFile) return null;
+            const pane = openPanes.find(p => p.filename === activeFocusedFile);
+            return pane ? pane.cm : null;
+        }
+
+        function clearActiveEditor() { 
+            const doc = getActiveDoc();
+            if (doc) { doc.setValue(''); getActiveCM().focus(); logToConsole(`${activeFocusedFile} 內容已清空。`, false, true); }
+            else alert("請先點擊選擇一個檔案視窗");
+        }
+        function undoActiveEditor() { const doc = getActiveDoc(); if (doc) { doc.undo(); getActiveCM().focus(); } }
+        async function clearAndPaste() {
+            const doc = getActiveDoc();
+            if(!doc) { alert("請先點擊選擇一個檔案視窗"); return; }
+            try { const text = await navigator.clipboard.readText(); doc.setValue(text); logToConsole('成功讀取剪貼簿並覆蓋程式碼。', false, true); } 
+            catch (err) { doc.setValue(''); getActiveCM().focus(); logToConsole('無法讀取剪貼簿，畫面已清空。請直接按 Ctrl+V (或 Cmd+V) 手動貼上。', false, true); }
+        }
 
         // ==========================================
         // 虛擬打包引擎
@@ -498,14 +847,10 @@
             
             for (const [filename, fileObj] of Object.entries(vfs)) {
                 if (filename === 'index.html') continue;
-                let mimeType = 'text/plain';
-                let content = fileObj.doc.getValue();
-                
+                let mimeType = 'text/plain'; let content = fileObj.doc.getValue();
                 if (filename.endsWith('.css')) mimeType = 'text/css';
                 else if (filename.endsWith('.js')) { mimeType = 'text/javascript'; content = addLoopProtection(content); }
-                
-                const blob = new Blob([content], { type: mimeType });
-                objectUrls[filename] = URL.createObjectURL(blob);
+                const blob = new Blob([content], { type: mimeType }); objectUrls[filename] = URL.createObjectURL(blob);
             }
 
             for (const [filename, url] of Object.entries(objectUrls)) {
@@ -529,16 +874,11 @@
 
         window.addEventListener('message', (event) => {
             if (!event.data || !event.data.type) return;
-            
             if (event.data.type === 'pan-start') startPan(event.data.x, event.data.y);
             if (event.data.type === 'pan-move') movePan(event.data.x, event.data.y);
             if (event.data.type === 'pan-end') endPan();
-
-            if (event.data.type === 'log') {
-                logToConsole(event.data.args.join(' '));
-            } else if (event.data.type === 'error') {
-                logToConsole(event.data.msg, true);
-            }
+            if (event.data.type === 'log') logToConsole(event.data.args.join(' '));
+            else if (event.data.type === 'error') logToConsole(event.data.msg, true);
         });
         function clearConsole() { document.getElementById('console-logs').innerHTML = ''; }
 
@@ -550,49 +890,36 @@
             document.getElementById('search-results').style.display = 'none'; openModal('search-modal');
             setTimeout(() => document.getElementById('search-input').focus(), 100);
         }
-
         function performSearch() {
-            const query = document.getElementById('search-input').value;
-            const resultsContainer = document.getElementById('search-results');
-            resultsContainer.innerHTML = '';
-            if (!query) { resultsContainer.style.display = 'none'; return; }
-            
+            const query = document.getElementById('search-input').value; const resultsContainer = document.getElementById('search-results');
+            resultsContainer.innerHTML = ''; if (!query) { resultsContainer.style.display = 'none'; return; }
             let found = false;
             for (const [filename, fileObj] of Object.entries(vfs)) {
                 const content = fileObj.doc.getValue();
                 if (content.includes(query)) {
-                    found = true;
-                    const item = document.createElement('div'); item.className = 'search-result-item';
-                    const idx = content.indexOf(query);
-                    const start = Math.max(0, idx - 20); const end = Math.min(content.length, idx + query.length + 20);
+                    found = true; const item = document.createElement('div'); item.className = 'search-result-item';
+                    const idx = content.indexOf(query); const start = Math.max(0, idx - 20); const end = Math.min(content.length, idx + query.length + 20);
                     let snippet = content.substring(start, end).replace(/</g, "&lt;").replace(/>/g, "&gt;");
                     const safeQuery = query.replace(/</g, "&lt;").replace(/>/g, "&gt;");
                     snippet = snippet.replace(safeQuery, `<span class="highlight">${safeQuery}</span>`);
-
                     item.innerHTML = `<div class="search-result-file">${filename}</div><div class="search-result-context">...${snippet}...</div>`;
-                    item.onclick = () => { switchFile(filename); closeModal('search-modal'); };
-                    resultsContainer.appendChild(item);
+                    item.onclick = () => { openPane(filename); closeModal('search-modal'); }; resultsContainer.appendChild(item);
                 }
             }
             resultsContainer.style.display = found ? 'block' : 'none';
             if(!found) resultsContainer.innerHTML = '<div style="color:var(--text-muted); padding:8px;">沒有找到符合的結果。</div>';
         }
-
         function performReplaceAll() {
-            const query = document.getElementById('search-input').value;
-            const replacement = document.getElementById('replace-input').value;
-            if (!query) return;
-
-            let replaceCount = 0;
+            const query = document.getElementById('search-input').value; const replacement = document.getElementById('replace-input').value;
+            if (!query) return; let replaceCount = 0;
             for (const [filename, fileObj] of Object.entries(vfs)) {
                 let content = fileObj.doc.getValue();
                 if (content.includes(query)) {
-                    let parts = content.split(query);
-                    replaceCount += parts.length - 1;
+                    let parts = content.split(query); replaceCount += parts.length - 1;
                     fileObj.doc.setValue(parts.join(replacement));
                 }
             }
-            alert(`已成功替換 ${replaceCount} 個項目。`); performSearch(); updatePreview();
+            alert(`已成功替換 ${replaceCount} 個項目。`); performSearch(); updatePreview(); saveCurrentProject();
         }
 
         // ==========================================
@@ -601,67 +928,67 @@
         function openModal(id) { document.getElementById(id).classList.add('show'); }
         function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-        const apiKeyInput = document.getElementById('gemini-api-key');
-        apiKeyInput.value = localStorage.getItem('geminiApiKey') || '';
-        apiKeyInput.addEventListener('input', (e) => { localStorage.setItem('geminiApiKey', e.target.value.trim()); });
+        document.getElementById('fb-api-key').value = fbApiKey;
+        document.getElementById('fb-auth-domain').value = fbAuthDomain;
+        document.getElementById('fb-project-id').value = fbProjectId;
 
-        const modelSelect = document.getElementById('gemini-model-select');
-        modelSelect.value = localStorage.getItem('geminiModel') || 'gemini-1.5-flash';
-        modelSelect.addEventListener('change', (e) => { localStorage.setItem('geminiModel', e.target.value); });
+        const apiKeyInput = document.getElementById('gemini-api-key'); apiKeyInput.value = localStorage.getItem('geminiApiKey') || '';
+        const modelSelect = document.getElementById('gemini-model-select'); modelSelect.value = localStorage.getItem('geminiModel') || 'gemini-1.5-flash';
 
         let resDesktop = JSON.parse(localStorage.getItem('resDesktop')) || { w: 1920, h: 1080 };
         let resTablet = JSON.parse(localStorage.getItem('resTablet')) || { w: 820, h: 1180 };
         let resMobile = JSON.parse(localStorage.getItem('resMobile')) || { w: 390, h: 844 };
-        
         document.getElementById('desktop-w').value = resDesktop.w; document.getElementById('desktop-h').value = resDesktop.h;
         document.getElementById('tablet-w').value = resTablet.w; document.getElementById('tablet-h').value = resTablet.h;
         document.getElementById('mobile-w').value = resMobile.w; document.getElementById('mobile-h').value = resMobile.h;
 
-        function saveResolutions() {
+        function saveSettingsAndReload() {
+            localStorage.setItem('fbApiKey', document.getElementById('fb-api-key').value.trim());
+            localStorage.setItem('fbAuthDomain', document.getElementById('fb-auth-domain').value.trim());
+            localStorage.setItem('fbProjectId', document.getElementById('fb-project-id').value.trim());
+            
+            localStorage.setItem('geminiApiKey', apiKeyInput.value.trim());
+            localStorage.setItem('geminiModel', modelSelect.value);
+
             resDesktop.w = parseInt(document.getElementById('desktop-w').value) || 1920; resDesktop.h = parseInt(document.getElementById('desktop-h').value) || 1080;
             resTablet.w = parseInt(document.getElementById('tablet-w').value) || 820; resTablet.h = parseInt(document.getElementById('tablet-h').value) || 1180;
             resMobile.w = parseInt(document.getElementById('mobile-w').value) || 390; resMobile.h = parseInt(document.getElementById('mobile-h').value) || 844;
-            
             localStorage.setItem('resDesktop', JSON.stringify(resDesktop)); localStorage.setItem('resTablet', JSON.stringify(resTablet)); localStorage.setItem('resMobile', JSON.stringify(resMobile));
-            manualZoom = false; applyDeviceScale(); 
+            
+            alert("設定已儲存！系統將重新載入以套用變更。");
+            window.location.reload();
         }
-        document.querySelectorAll('.res-input').forEach(input => input.addEventListener('change', saveResolutions));
 
         let isDarkMode = false;
-        function toggleDarkMode() { isDarkMode = !isDarkMode; document.body.classList.toggle('dark-mode', isDarkMode); editor.setOption('theme', isDarkMode ? 'monokai' : 'default'); }
+        function toggleDarkMode() { 
+            isDarkMode = !isDarkMode; document.body.classList.toggle('dark-mode', isDarkMode); 
+            openPanes.forEach(p => p.cm.setOption('theme', isDarkMode ? 'monokai' : 'default'));
+            const themeBtn = document.getElementById('theme-btn');
+            if(themeBtn) themeBtn.textContent = isDarkMode ? '切換淺色模式' : '切換深色模式';
+        }
 
         function exportSingleFile(type) {
             let content = ''; let mimeType = 'text/plain';
             if (type === 'html') { content = vfs['index.html']?.doc.getValue() || ''; mimeType = 'text/html'; }
             else if (type === 'css') { content = vfs['style.css']?.doc.getValue() || ''; mimeType = 'text/css'; }
             else if (type === 'js') { content = vfs['app.js']?.doc.getValue() || ''; mimeType = 'text/javascript'; }
-            
-            const inputName = document.getElementById('project-name-input').value.trim() || "index";
-            const fileName = `${inputName}.${type}`;
-            const blob = new Blob([content], { type: mimeType });
-            const url = URL.createObjectURL(blob);
+            const fileName = `${currentProjectName}.${type}`; const blob = new Blob([content], { type: mimeType }); const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url);
+            closeModal('export-modal');
         }
 
         let directoryHandle = null;
         async function exportToFolder() {
             try {
                 if (!directoryHandle) directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-                const inputName = document.getElementById('project-name-input').value.trim() || "index";
-                const projectDirHandle = await directoryHandle.getDirectoryHandle(inputName, { create: true });
-                
+                const projectDirHandle = await directoryHandle.getDirectoryHandle(currentProjectName, { create: true });
                 async function writeFile(dirHandle, filename, content) {
                     const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
                     const writable = await fileHandle.createWritable();
                     await writable.write(content); await writable.close();
                 }
-
-                for (const [filename, fileObj] of Object.entries(vfs)) {
-                    await writeFile(projectDirHandle, filename, fileObj.doc.getValue());
-                }
-
-                logToConsole(`專案已成功匯出至：${inputName}`, false, true);
-                closeModal('settings-modal'); 
+                for (const [filename, fileObj] of Object.entries(vfs)) { await writeFile(projectDirHandle, filename, fileObj.doc.getValue()); }
+                logToConsole(`專案已成功匯出至：${currentProjectName}`, false, true); closeModal('export-modal'); 
             } catch (error) {
                 if (error.name === 'NotAllowedError') { alert('匯出失敗：未取得寫入權限。'); directoryHandle = null; } 
                 else if (error.name !== 'AbortError') { alert('匯出失敗：瀏覽器不支援此功能。'); }
@@ -672,16 +999,16 @@
         // AI 生成呼叫
         // ==========================================
         async function askGemini() {
-            const apiKey = apiKeyInput.value.trim();
-            const userPrompt = document.getElementById('ai-prompt-input').value.trim();
-            const submitBtn = document.getElementById('ai-submit-btn');
-            const currentCode = editor.getValue(); 
-            const selectedModel = modelSelect.value;
+            const doc = getActiveDoc();
+            if (!doc) { alert('請先點擊選擇要操作的檔案視窗。'); return; }
+
+            const apiKey = apiKeyInput.value.trim(); const userPrompt = document.getElementById('ai-prompt-input').value.trim();
+            const submitBtn = document.getElementById('ai-submit-btn'); const currentCode = doc.getValue(); const selectedModel = modelSelect.value;
 
             if (!apiKey) { alert('請先在設定中輸入您的 Gemini API Key。'); closeModal('ai-modal'); openModal('settings-modal'); return; }
             if (!userPrompt) return;
 
-            const fullPrompt = `你是一個專業的前端開發助手。\n目前 ${currentFile} 分頁中的程式碼如下：\n\`\`\`\n${currentCode}\n\`\`\`\n使用者的需求是：「${userPrompt}」\n請根據現有程式碼的架構來完成需求。\n嚴格規定：\n1. 請直接輸出修改或新增後的【完整 ${currentFile} 程式碼】，不要只給片段。\n2. 『只』輸出純粹的程式碼內容，絕對不要包含 markdown 區塊標記 (例如 \`\`\`html) ，也不要任何開頭或結尾的解釋文字。`;
+            const fullPrompt = `你是一個專業的前端開發助手。\n目前 ${activeFocusedFile} 中的程式碼如下：\n\`\`\`\n${currentCode}\n\`\`\`\n使用者的需求是：「${userPrompt}」\n請根據現有程式碼的架構來完成需求。\n嚴格規定：\n1. 請直接輸出修改或新增後的【完整 ${activeFocusedFile} 程式碼】，不要只給片段。\n2. 『只』輸出純粹的程式碼內容，絕對不要包含 markdown 區塊標記 (例如 \`\`\`html) ，也不要任何開頭或結尾的解釋文字。`;
 
             submitBtn.innerHTML = '處理中...'; submitBtn.disabled = true;
 
@@ -690,126 +1017,66 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] })
                 });
-
-                if (!response.ok) {
-                    let detailedError = "未知的 API 錯誤";
-                    try { const errData = await response.json(); detailedError = errData.error?.message || response.statusText; } catch (e) {}
-                    throw new Error(`[代碼 ${response.status}] ${detailedError}`);
-                }
-
+                if (!response.ok) { let err = "未知的 API 錯誤"; try { const d = await response.json(); err = d.error?.message || response.statusText; } catch(e){} throw new Error(`[代碼 ${response.status}] ${err}`); }
                 const data = await response.json();
                 let generatedCode = data.candidates[0].content.parts[0].text;
                 generatedCode = generatedCode.replace(/^```[a-z]*\n/gm, '').replace(/```$/gm, '').trim();
 
-                editor.setValue(generatedCode); closeModal('ai-modal');
+                doc.setValue(generatedCode); closeModal('ai-modal'); saveCurrentProject();
             } catch (error) {
-                console.error("Gemini Error:", error); 
-                logToConsole(`模型 [${selectedModel}] 呼叫失敗: ${error.message}`, true);
-                alert(`API 呼叫失敗！請檢查右下角終端機了解詳情。`);
-            } finally {
-                submitBtn.innerHTML = '生成並取代'; submitBtn.disabled = false;
-            }
+                logToConsole(`模型 [${selectedModel}] 呼叫失敗: ${error.message}`, true); alert(`API 呼叫失敗！請檢查右下角終端機了解詳情。`);
+            } finally { submitBtn.innerHTML = '生成並取代'; submitBtn.disabled = false; }
+        }
+
+        function openAiModal() {
+            if(!activeFocusedFile) { alert("請先點選左側或下方的任一檔案視窗，再進行 AI 生成！"); return; }
+            document.getElementById('ai-prompt-input').value = ''; openModal('ai-modal');
+            setTimeout(() => document.getElementById('ai-prompt-input').focus(), 100);
         }
 
         // ==========================================
         // 介面拖曳、平移、全螢幕與縮放
         // ==========================================
-        const resizerLeft = document.getElementById('resizer-left');
-        const resizerRight = document.getElementById('resizer-right');
-        const sidebar = document.getElementById('sidebar');
-        const editorSide = document.getElementById('editor-side');
-        const hResizer = document.getElementById('h-resizer');
-        const consolePanel = document.getElementById('console-panel');
-        const panContainer = document.getElementById('pan-container');
-        const deviceFrame = document.getElementById('device-frame'); 
-        const iframeWrapper = document.getElementById('iframe-wrapper'); 
-        const buttons = document.querySelectorAll('#device-buttons button'); 
-        const zoomSlider = document.getElementById('zoom-slider');
-        const zoomLabel = document.getElementById('zoom-label');
-        const previewPanel = document.getElementById('preview-panel');
+        const resizerLeft = document.getElementById('resizer-left'), resizerRight = document.getElementById('resizer-right'), hResizer = document.getElementById('h-resizer');
+        const sidebar = document.getElementById('sidebar'), editorSide = document.getElementById('editor-side'), consolePanel = document.getElementById('console-panel');
+        const panContainer = document.getElementById('pan-container'), deviceFrame = document.getElementById('device-frame'), iframeWrapper = document.getElementById('iframe-wrapper');
+        const buttons = document.querySelectorAll('#device-buttons button'), zoomSlider = document.getElementById('zoom-slider'), zoomLabel = document.getElementById('zoom-label'), previewPanel = document.getElementById('preview-panel');
         
         let isResizingLeft = false, isResizingRight = false, isHResizing = false;
         let currentDeviceMode = 'desktop', manualZoom = false; 
-        let panX = 0, panY = 0, isPanning = false, startPanX = 0, startPanY = 0, mouseStartX = 0, mouseStartY = 0;
-        let isSafePanMode = false;
+        let panX = 0, panY = 0, isPanning = false, startPanX = 0, startPanY = 0, mouseStartX = 0, mouseStartY = 0, isSafePanMode = false;
 
-        function toggleFullscreen() {
-            previewPanel.classList.toggle('fullscreen');
-            applyDeviceScale();
-        }
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && previewPanel.classList.contains('fullscreen')) {
-                previewPanel.classList.remove('fullscreen');
-                applyDeviceScale();
-            }
-        });
+        function toggleFullscreen() { previewPanel.classList.toggle('fullscreen'); applyDeviceScale(); }
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && previewPanel.classList.contains('fullscreen')) { previewPanel.classList.remove('fullscreen'); applyDeviceScale(); } });
 
         function togglePanMode() {
-            isSafePanMode = !isSafePanMode;
-            const btn = document.getElementById('pan-mode-btn');
-            if (isSafePanMode) {
-                btn.classList.add('active');
-                deviceFrame.style.pointerEvents = 'none'; 
-            } else {
-                btn.classList.remove('active');
-                deviceFrame.style.pointerEvents = 'auto';
-            }
+            isSafePanMode = !isSafePanMode; const btn = document.getElementById('pan-mode-btn');
+            if (isSafePanMode) { btn.classList.add('active'); deviceFrame.style.pointerEvents = 'none'; } 
+            else { btn.classList.remove('active'); deviceFrame.style.pointerEvents = 'auto'; }
         }
 
-        zoomSlider.addEventListener('input', (e) => {
-            manualZoom = true; const scale = parseFloat(e.target.value);
-            zoomLabel.textContent = `${Math.round(scale * 100)}%`;
-            deviceFrame.style.transform = `translate(-50%, -50%) scale(${scale})`;
-        });
+        zoomSlider.addEventListener('input', (e) => { manualZoom = true; const scale = parseFloat(e.target.value); zoomLabel.textContent = `${Math.round(scale * 100)}%`; deviceFrame.style.transform = `translate(-50%, -50%) scale(${scale})`; });
 
         function applyDeviceScale() {
             const wrapperWidth = iframeWrapper.clientWidth; const wrapperHeight = iframeWrapper.clientHeight;
             let targetW = resDesktop.w, targetH = resDesktop.h;
-            if (currentDeviceMode === 'mobile') { targetW = resMobile.w; targetH = resMobile.h; } 
-            else if (currentDeviceMode === 'tablet') { targetW = resTablet.w; targetH = resTablet.h; } 
-
+            if (currentDeviceMode === 'mobile') { targetW = resMobile.w; targetH = resMobile.h; } else if (currentDeviceMode === 'tablet') { targetW = resTablet.w; targetH = resTablet.h; } 
             deviceFrame.style.width = `${targetW}px`; deviceFrame.style.height = `${targetH}px`;
             let targetScale = Math.min((wrapperWidth - 60) / targetW, (wrapperHeight - 60) / targetH, 1);
 
             if (!manualZoom) {
-                deviceFrame.style.transform = `translate(-50%, -50%) scale(${targetScale})`;
-                zoomSlider.value = targetScale; zoomLabel.textContent = `${Math.round(targetScale * 100)}%`;
+                deviceFrame.style.transform = `translate(-50%, -50%) scale(${targetScale})`; zoomSlider.value = targetScale; zoomLabel.textContent = `${Math.round(targetScale * 100)}%`;
                 panX = 0; panY = 0; panContainer.style.transform = `translate(0px, 0px)`;
-            } else {
-                deviceFrame.style.transform = `translate(-50%, -50%) scale(${parseFloat(zoomSlider.value)})`;
-            }
+            } else { deviceFrame.style.transform = `translate(-50%, -50%) scale(${parseFloat(zoomSlider.value)})`; }
         }
 
-        function setDevice(deviceType) { 
-            currentDeviceMode = deviceType;
-            buttons.forEach(btn => btn.classList.remove('active')); event.currentTarget.classList.add('active'); 
-            manualZoom = false; applyDeviceScale(); 
-        }
+        function setDevice(deviceType) { currentDeviceMode = deviceType; buttons.forEach(btn => btn.classList.remove('active')); event.currentTarget.classList.add('active'); manualZoom = false; applyDeviceScale(); }
 
-        function startPan(x, y) { 
-            isPanning = true; mouseStartX = x; mouseStartY = y; startPanX = panX; startPanY = panY; 
-            iframeWrapper.style.cursor = 'grabbing'; 
-            deviceFrame.style.pointerEvents = 'none'; 
-        }
-        function movePan(x, y) { 
-            if (!isPanning) return; 
-            panX = startPanX + (x - mouseStartX); panY = startPanY + (y - mouseStartY); 
-            panContainer.style.transform = `translate(${panX}px, ${panY}px)`; 
-        }
-        function endPan() { 
-            if (isPanning) { 
-                isPanning = false; 
-                iframeWrapper.style.cursor = 'auto'; 
-                if (!isSafePanMode) { deviceFrame.style.pointerEvents = 'auto'; } 
-            } 
-        }
+        function startPan(x, y) { isPanning = true; mouseStartX = x; mouseStartY = y; startPanX = panX; startPanY = panY; iframeWrapper.style.cursor = 'grabbing'; deviceFrame.style.pointerEvents = 'none'; }
+        function movePan(x, y) { if (!isPanning) return; panX = startPanX + (x - mouseStartX); panY = startPanY + (y - mouseStartY); panContainer.style.transform = `translate(${panX}px, ${panY}px)`; }
+        function endPan() { if (isPanning) { isPanning = false; iframeWrapper.style.cursor = 'auto'; if (!isSafePanMode) { deviceFrame.style.pointerEvents = 'auto'; } } }
 
-        iframeWrapper.addEventListener('mousedown', (e) => {
-            if (e.button === 1 || (e.button === 0 && e.altKey) || isSafePanMode) {
-                e.preventDefault(); startPan(e.screenX, e.screenY);
-            }
-        });
+        iframeWrapper.addEventListener('mousedown', (e) => { if (e.button === 1 || (e.button === 0 && e.altKey) || isSafePanMode) { e.preventDefault(); startPan(e.screenX, e.screenY); } });
 
         resizerLeft.addEventListener('mousedown', () => { isResizingLeft = true; resizerLeft.classList.add('active'); document.body.style.cursor = 'col-resize'; iframeWrapper.style.pointerEvents = 'none'; document.body.style.userSelect = 'none'; });
         resizerRight.addEventListener('mousedown', () => { isResizingRight = true; resizerRight.classList.add('active'); document.body.style.cursor = 'col-resize'; iframeWrapper.style.pointerEvents = 'none'; document.body.style.userSelect = 'none'; });
@@ -817,43 +1084,19 @@
 
         window.addEventListener('mousemove', (e) => { 
             if (isPanning) { movePan(e.screenX, e.screenY); return; }
-            
-            if (isResizingLeft) { 
-                const newWidth = Math.max(150, Math.min(e.clientX, 400));
-                sidebar.style.width = `${newWidth}px`; applyDeviceScale(); 
-            }
-            if (isResizingRight) { 
-                const sidebarW = sidebar.offsetWidth;
-                const newWidth = e.clientX - sidebarW;
-                if(newWidth > 150 && (window.innerWidth - e.clientX) > 150) {
-                    editorSide.style.width = `${newWidth}px`; editorSide.style.flex = 'none'; applyDeviceScale(); 
-                }
-            }
-            if (isHResizing) { 
-                const previewContainer = document.querySelector('.preview-side').getBoundingClientRect();
-                const newHeight = previewContainer.bottom - e.clientY;
-                if(newHeight > 40 && newHeight < previewContainer.height - 100) { 
-                    consolePanel.style.height = `${newHeight}px`; applyDeviceScale(); 
-                }
-            }
+            if (isResizingLeft) { const newWidth = Math.max(150, Math.min(e.clientX, 400)); sidebar.style.width = `${newWidth}px`; applyDeviceScale(); }
+            if (isResizingRight) { const sidebarW = sidebar.offsetWidth; const newWidth = e.clientX - sidebarW; if(newWidth > 150 && (window.innerWidth - e.clientX) > 150) { editorSide.style.width = `${newWidth}px`; editorSide.style.flex = 'none'; applyDeviceScale(); } }
+            if (isHResizing) { const previewContainer = document.querySelector('.preview-side').getBoundingClientRect(); const newHeight = previewContainer.bottom - e.clientY; if(newHeight > 40 && newHeight < previewContainer.height - 100) { consolePanel.style.height = `${newHeight}px`; applyDeviceScale(); } }
         });
 
         window.addEventListener('mouseup', () => { 
             endPan();
-            if(isResizingLeft || isResizingRight || isHResizing) { 
-                isResizingLeft = false; isResizingRight = false; isHResizing = false;
-                resizerLeft.classList.remove('active'); resizerRight.classList.remove('active'); hResizer.classList.remove('active');
-                document.body.style.cursor = 'default'; iframeWrapper.style.pointerEvents = 'auto'; document.body.style.userSelect = 'auto';
-            } 
+            if(isResizingLeft || isResizingRight || isHResizing) { isResizingLeft = false; isResizingRight = false; isHResizing = false; resizerLeft.classList.remove('active'); resizerRight.classList.remove('active'); hResizer.classList.remove('active'); document.body.style.cursor = 'default'; iframeWrapper.style.pointerEvents = 'auto'; document.body.style.userSelect = 'auto'; } 
         });
 
         window.addEventListener('resize', applyDeviceScale);
         
-        // Initial Mount
-        editor.swapDoc(vfs['index.html'].doc);
-        renderFileTree();
-        updatePreview(); 
-        applyDeviceScale();
+        loadDashboardProjects();
     </script>
 </body>
 </html>
